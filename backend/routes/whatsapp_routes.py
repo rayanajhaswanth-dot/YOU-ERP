@@ -152,45 +152,62 @@ async def process_whatsapp_message(
         if media_url and is_audio:
             print(f"🎤 Processing voice message with Sarvam AI... Content-Type: {media_content_type}")
             try:
-                # Sarvam AI speech-to-text-translate endpoint
-                # Specialized for Indian regional dialects (Hindi, Tamil, Telugu, Kannada, etc.)
-                print(f"📤 Sending audio to Sarvam AI (saaras:v1 model)...")
-                
+                # STEP 1: Securely download audio from Twilio with Basic Auth
+                print(f"📥 Downloading audio from Twilio...")
                 async with httpx.AsyncClient(timeout=60.0) as client:
-                    # First download the audio from Twilio
                     auth = (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
                     audio_response = await client.get(media_url, auth=auth)
+                    
+                    if audio_response.status_code != 200:
+                        raise Exception(f"Twilio download failed: {audio_response.status_code}")
+                    
                     audio_data = audio_response.content
                     print(f"📥 Downloaded {len(audio_data)} bytes of audio")
                     
-                    # Convert audio to base64 for Sarvam API
-                    audio_base64 = base64.b64encode(audio_data).decode('utf-8')
+                    # STEP 2: Upload to Sarvam AI using multipart/form-data
+                    # Sarvam expects file upload, not JSON with base64
+                    print(f"📤 Uploading to Sarvam AI (saaras:v1 model)...")
                     
-                    # Call Sarvam AI speech-to-text-translate API
-                    sarvam_payload = {
-                        "input": audio_base64,
-                        "model": "saaras:v1",  # Specialized for Indian regional dialects
-                        "language_code": "unknown"  # Auto-detect language
+                    # Determine file extension
+                    if 'ogg' in media_content_type or 'opus' in media_content_type:
+                        filename = 'voice.ogg'
+                        file_mime = 'audio/ogg'
+                    elif 'mp3' in media_content_type or 'mpeg' in media_content_type:
+                        filename = 'voice.mp3'
+                        file_mime = 'audio/mpeg'
+                    else:
+                        filename = 'voice.ogg'
+                        file_mime = 'audio/ogg'
+                    
+                    # Create multipart form data
+                    files = {
+                        'file': (filename, audio_data, file_mime)
+                    }
+                    data = {
+                        'model': 'saaras:v1'
                     }
                     
                     sarvam_response = await client.post(
                         "https://api.sarvam.ai/speech-to-text-translate",
                         headers={
-                            "api-subscription-key": SARVAM_API_KEY,
-                            "Content-Type": "application/json"
+                            "api-subscription-key": SARVAM_API_KEY
                         },
-                        json=sarvam_payload
+                        files=files,
+                        data=data
                     )
                     
                     print(f"🎤 Sarvam response status: {sarvam_response.status_code}")
+                    print(f"🎤 Sarvam response: {sarvam_response.text[:500]}")
                     
                     if sarvam_response.status_code == 200:
                         sarvam_data = sarvam_response.json()
-                        print(f"🎤 Sarvam data: {sarvam_data}")
                         
-                        # Extract transcript and language
+                        # Extract transcript
                         transcript = sarvam_data.get("transcript", "")
                         language_code = sarvam_data.get("language_code", "unknown")
+                        
+                        if not transcript:
+                            transcript = sarvam_data.get("text", "")
                         
                         # Map language codes to names
                         lang_map = {
@@ -207,21 +224,20 @@ async def process_whatsapp_message(
                         
                     else:
                         error_text = sarvam_response.text
-                        print(f"❌ Sarvam API error: {error_text}")
+                        print(f"❌ Sarvam API error ({sarvam_response.status_code}): {error_text}")
                         
                         # Fallback to Gemini if Sarvam fails
                         print(f"🔄 Falling back to Gemini for transcription...")
                         
                         # Save audio to temp file for Gemini
-                        file_ext = '.ogg' if 'ogg' in media_content_type else '.mp3'
-                        temp_path = os.path.join(tempfile.gettempdir(), f"voice_{uuid.uuid4()}{file_ext}")
+                        temp_path = os.path.join(tempfile.gettempdir(), f"voice_{uuid.uuid4()}.ogg")
                         with open(temp_path, 'wb') as f:
                             f.write(audio_data)
                         
                         try:
                             audio_file = FileContentWithMimeType(
                                 file_path=temp_path,
-                                mime_type=media_content_type or 'audio/ogg'
+                                mime_type=file_mime
                             )
                             
                             chat = LlmChat(
@@ -231,7 +247,7 @@ async def process_whatsapp_message(
                             ).with_model("gemini", "gemini-2.5-flash")
                             
                             user_msg = UserMessage(
-                                text="Transcribe this audio. If not in English, provide English translation too.",
+                                text="Transcribe this audio exactly. If not in English, provide English translation too. Just respond with the transcription.",
                                 file_contents=[audio_file]
                             )
                             
