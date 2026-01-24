@@ -97,9 +97,13 @@ async def login(data: LoginRequest):
 @router.get("/me")
 async def get_me(current_user: TokenData = Depends(get_current_user)):
     supabase = get_supabase()
-    user_result = supabase.table('users').select('id, email, full_name, role, politician_id').eq('id', current_user.user_id).execute()
+    # Select columns that exist in the actual database
+    user_result = supabase.table('users').select('id, email, role, politician_id').eq('id', current_user.user_id).execute()
     
     if not user_result.data:
         raise HTTPException(status_code=404, detail="User not found")
     
-    return user_result.data[0]
+    user_data = user_result.data[0]
+    # Add full_name from email if not present
+    user_data['full_name'] = user_data.get('full_name', user_data['email'].split('@')[0].title())
+    return user_data

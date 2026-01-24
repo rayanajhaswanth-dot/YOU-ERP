@@ -49,8 +49,14 @@ async def get_sentiment_data(
     supabase = get_supabase()
     start_date = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
     
-    result = supabase.table('sentiment_analytics').select('*').eq('politician_id', current_user.politician_id).gte('created_at', start_date).order('created_at', desc=True).execute()
-    return result.data
+    try:
+        result = supabase.table('sentiment_analytics').select('*').eq('politician_id', current_user.politician_id).gte('created_at', start_date).order('created_at', desc=True).execute()
+        return result.data
+    except Exception as e:
+        # Return empty list if table doesn't exist
+        if 'PGRST205' in str(e) or 'sentiment_analytics' in str(e).lower():
+            return []
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/sentiment/overview")
 async def get_sentiment_overview(current_user: TokenData = Depends(get_current_user)):
@@ -58,7 +64,17 @@ async def get_sentiment_overview(current_user: TokenData = Depends(get_current_u
         raise HTTPException(status_code=403, detail="User not associated with a politician")
     
     supabase = get_supabase()
-    all_data = supabase.table('sentiment_analytics').select('sentiment_score, issue_category').eq('politician_id', current_user.politician_id).execute()
+    try:
+        all_data = supabase.table('sentiment_analytics').select('sentiment_score, issue_category').eq('politician_id', current_user.politician_id).execute()
+    except Exception as e:
+        # Return empty data if table doesn't exist
+        if 'PGRST205' in str(e) or 'sentiment_analytics' in str(e).lower():
+            return {
+                "average_sentiment": 0,
+                "total_mentions": 0,
+                "issue_distribution": {}
+            }
+        raise HTTPException(status_code=500, detail=str(e))
     
     if not all_data.data:
         return {

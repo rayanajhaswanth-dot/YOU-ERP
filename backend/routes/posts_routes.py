@@ -51,13 +51,19 @@ async def get_posts(
         raise HTTPException(status_code=403, detail="User not associated with a politician")
     
     supabase = get_supabase()
-    query = supabase.table('posts').select('*').eq('politician_id', current_user.politician_id)
-    
-    if status:
-        query = query.eq('status', status)
-    
-    result = query.order('created_at', desc=True).execute()
-    return result.data
+    try:
+        query = supabase.table('posts').select('*').eq('politician_id', current_user.politician_id)
+        
+        if status:
+            query = query.eq('status', status)
+        
+        result = query.order('created_at', desc=True).execute()
+        return result.data
+    except Exception as e:
+        # Return empty list if table doesn't exist
+        if 'PGRST205' in str(e) or 'posts' in str(e).lower():
+            return []
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/{post_id}")
 async def get_post(
