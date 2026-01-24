@@ -18,6 +18,7 @@ export default function HelpPeople({ user }) {
   const [topPriority, setTopPriority] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [showVoiceRecorder, setShowVoiceRecorder] = useState(false);
   const [showVerification, setShowVerification] = useState(false);
   const [selectedGrievance, setSelectedGrievance] = useState(null);
   const [formData, setFormData] = useState({
