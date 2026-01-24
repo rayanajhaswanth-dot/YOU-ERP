@@ -159,66 +159,6 @@ async def update_grievance(
     result = supabase.table('grievances').update(update_data).eq('id', grievance_id).execute()
     return {"message": "Grievance updated successfully"}
 
-@router.get("/metrics")
-async def get_grievance_metrics(current_user: TokenData = Depends(get_current_user)):
-    """
-    Get comprehensive metrics for grievances including resolved, unresolved, and long pending
-    """
-    if not current_user.politician_id:
-        raise HTTPException(status_code=403, detail="User not associated with a politician")
-    
-    supabase = get_supabase()
-    all_grievances = supabase.table('grievances').select('*').eq('politician_id', current_user.politician_id).execute()
-    
-    total = len(all_grievances.data)
-    
-    # Count by status
-    resolved = len([g for g in all_grievances.data if g.get('status', '').upper() == 'RESOLVED'])
-    in_progress = len([g for g in all_grievances.data if g.get('status', '').upper() == 'IN_PROGRESS'])
-    pending = len([g for g in all_grievances.data if g.get('status', '').upper() == 'PENDING'])
-    
-    # Calculate unresolved (pending + in_progress)
-    unresolved = pending + in_progress
-    
-    # Calculate long pending (pending for more than 7 days)
-    long_pending_days = 7
-    now = datetime.now(timezone.utc)
-    long_pending_count = 0
-    
-    for g in all_grievances.data:
-        if g.get('status', '').upper() in ['PENDING', 'IN_PROGRESS']:
-            created_at = datetime.fromisoformat(g['created_at'].replace('Z', '+00:00'))
-            days_elapsed = (now - created_at).days
-            if days_elapsed >= long_pending_days:
-                long_pending_count += 1
-    
-    # Calculate resolution rate
-    resolution_rate = round((resolved / total * 100) if total > 0 else 0, 1)
-    
-    # Calculate average resolution time (for resolved issues)
-    resolved_issues = [g for g in all_grievances.data if g.get('status', '').upper() == 'RESOLVED' and g.get('resolved_at')]
-    avg_resolution_days = 0
-    
-    if resolved_issues:
-        total_days = 0
-        for g in resolved_issues:
-            created = datetime.fromisoformat(g['created_at'].replace('Z', '+00:00'))
-            resolved_at = datetime.fromisoformat(g['resolved_at'].replace('Z', '+00:00'))
-            total_days += (resolved_at - created).days
-        avg_resolution_days = round(total_days / len(resolved_issues), 1)
-    
-    return {
-        "total": total,
-        "resolved": resolved,
-        "unresolved": unresolved,
-        "pending": pending,
-        "in_progress": in_progress,
-        "long_pending": long_pending_count,
-        "long_pending_days": long_pending_days,
-        "resolution_rate": resolution_rate,
-        "avg_resolution_days": avg_resolution_days
-    }
-
 @router.get("/stats/overview")
 async def get_grievance_stats(current_user: TokenData = Depends(get_current_user)):
     if not current_user.politician_id:
