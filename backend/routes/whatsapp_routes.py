@@ -392,8 +392,7 @@ Respond with JSON only:
 }}"""
             
             gemini_payload = {
-                "contents": [{"parts": [{"text": intent_prompt}]}],
-                "generationConfig": {"responseMimeType": "application/json"}
+                "contents": [{"parts": [{"text": intent_prompt}]}]
             }
             
             intent_response = await client.post(
@@ -403,6 +402,8 @@ Respond with JSON only:
             )
             
             print(f"🔍 Intent API response status: {intent_response.status_code}")
+            if intent_response.status_code != 200:
+                print(f"🔍 Intent API error: {intent_response.text[:300]}")
             
             intent = "GRIEVANCE"  # Default to grievance
             ai_response_text = ""
