@@ -555,6 +555,14 @@ export default function HelpPeople({ user }) {
           }}
         />
       )}
+
+      {/* Voice Recorder Modal */}
+      {showVoiceRecorder && (
+        <VoiceRecorder
+          onTranscriptionComplete={handleVoiceTranscription}
+          onClose={() => setShowVoiceRecorder(false)}
+        />
+      )}
     </motion.div>
   );
 }
