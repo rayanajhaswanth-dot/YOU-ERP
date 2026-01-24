@@ -38,6 +38,7 @@ async def whatsapp_webhook(request: Request):
         profile_name = form_data.get('ProfileName', 'Constituent')
         
         print(f"📱 Received WhatsApp message from {from_number}: {message_body}")
+        print(f"   To: {to_number}, SID: {message_sid}, Profile: {profile_name}")
         
         phone_clean = from_number.replace('whatsapp:', '').strip()
         
@@ -48,16 +49,24 @@ async def whatsapp_webhook(request: Request):
             message_sid
         )
         
+        print(f"📤 Sending response: {response_message[:100]}...")
+        
         resp = MessagingResponse()
         resp.message(response_message)
         
-        return str(resp)
+        from fastapi.responses import Response
+        return Response(content=str(resp), media_type="application/xml")
         
     except Exception as e:
         print(f"❌ Webhook error: {e}")
+        import traceback
+        traceback.print_exc()
+        
         resp = MessagingResponse()
         resp.message("Sorry, I encountered an error processing your message. Please try again.")
-        return str(resp)
+        
+        from fastapi.responses import Response
+        return Response(content=str(resp), media_type="application/xml")
 
 async def process_whatsapp_message(
     phone: str,
