@@ -9,11 +9,10 @@ import uuid
 router = APIRouter()
 
 class GrievanceCreate(BaseModel):
-    constituent_name: str
-    phone: str
-    message: str
-    source: str = "whatsapp"
-    priority: Optional[int] = 5
+    village: str
+    description: str
+    issue_type: str = "Other"
+    ai_priority: Optional[int] = 5
 
 class GrievanceUpdate(BaseModel):
     status: Optional[str] = None
@@ -34,13 +33,11 @@ async def create_grievance(
     grievance_data = {
         'id': grievance_id,
         'politician_id': current_user.politician_id,
-        'constituent_name': data.constituent_name,
-        'phone': data.phone,
-        'message': data.message,
-        'source': data.source,
-        'priority': data.priority,
-        'status': 'pending',
-        'created_by': current_user.user_id,
+        'village': data.village,
+        'description': data.description,
+        'issue_type': data.issue_type,
+        'ai_priority': data.ai_priority,
+        'status': 'PENDING',
         'created_at': datetime.now(timezone.utc).isoformat()
     }
     
