@@ -43,6 +43,9 @@ Build "YOU - Governance ERP & Workflow Automation for Legislators," a production
 ### 4. WhatsApp Bot ✅
 - Twilio integration for receiving grievances
 - Text message processing with AI analysis
+- **Voice message transcription** using Gemini 2.0 Flash [NEW - Jan 24, 2026]
+  - Supports Hindi, Tamil, Telugu, Kannada, Malayalam, Bengali, Marathi, Gujarati, Punjabi
+  - Auto-translation to English for non-English voice messages
 - Image/document OCR using Gemini
 - Auto-priority assignment
 
