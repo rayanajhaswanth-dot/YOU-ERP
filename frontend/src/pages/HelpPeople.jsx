@@ -510,6 +510,23 @@ export default function HelpPeople({ user }) {
           )}
         </div>
       </div>
+
+      {/* Photo Verification Modal */}
+      {showVerification && selectedGrievance && (
+        <PhotoVerification
+          grievance={selectedGrievance}
+          onVerificationComplete={(result) => {
+            fetchGrievances();
+            fetchMetrics();
+            setShowVerification(false);
+            setSelectedGrievance(null);
+          }}
+          onClose={() => {
+            setShowVerification(false);
+            setSelectedGrievance(null);
+          }}
+        />
+      )}
     </motion.div>
   );
 }
