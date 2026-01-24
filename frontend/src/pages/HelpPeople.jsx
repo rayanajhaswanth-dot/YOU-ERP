@@ -15,10 +15,9 @@ export default function HelpPeople({ user }) {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({
-    constituent_name: '',
-    phone: '',
-    message: '',
-    source: 'manual'
+    village: '',
+    description: '',
+    issue_type: 'Other'
   });
   const [analyzing, setAnalyzing] = useState(false);
 
@@ -50,27 +49,34 @@ export default function HelpPeople({ user }) {
       
       const aiResponse = await axios.post(
         `${BACKEND_URL}/api/ai/analyze-grievance`,
-        { text: formData.message, analysis_type: 'triage' },
+        { text: formData.description, analysis_type: 'triage' },
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      let priority = 5;
+      let ai_priority = 5;
+      let issue_type = 'Other';
       try {
         const analysis = JSON.parse(aiResponse.data.analysis.replace(/```json\n|```/g, ''));
-        priority = analysis.priority || 5;
+        ai_priority = analysis.priority || 5;
+        issue_type = analysis.category || 'Other';
       } catch (e) {
-        console.log('Could not parse AI response, using default priority');
+        console.log('Could not parse AI response, using defaults');
       }
 
       await axios.post(
         `${BACKEND_URL}/api/grievances/`,
-        { ...formData, priority },
+        { 
+          village: formData.village,
+          description: formData.description,
+          issue_type: issue_type,
+          ai_priority: ai_priority
+        },
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
       toast.success('Grievance registered successfully');
       setShowForm(false);
-      setFormData({ constituent_name: '', phone: '', message: '', source: 'manual' });
+      setFormData({ village: '', description: '', issue_type: 'Other' });
       fetchGrievances();
     } catch (error) {
       console.error('Error submitting grievance:', error);
@@ -97,12 +103,13 @@ export default function HelpPeople({ user }) {
   };
 
   const getStatusColor = (status) => {
-    switch (status) {
-      case 'pending':
+    const statusUpper = (status || '').toUpperCase();
+    switch (statusUpper) {
+      case 'PENDING':
         return 'bg-amber-500/10 text-amber-400 border-amber-500/20';
-      case 'in_progress':
+      case 'IN_PROGRESS':
         return 'bg-sky-500/10 text-sky-400 border-sky-500/20';
-      case 'resolved':
+      case 'RESOLVED':
         return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
       default:
         return 'bg-slate-500/10 text-slate-400 border-slate-500/20';
