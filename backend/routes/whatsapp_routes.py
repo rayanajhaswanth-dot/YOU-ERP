@@ -261,9 +261,22 @@ Respond ONLY with valid JSON, no markdown."""
         
         priority_label = "🔴 HIGH" if priority >= 8 else "🟡 MEDIUM" if priority >= 5 else "🟢 LOW"
         
+        media_note = "\n📸 Image received and analyzed" if media_url else ""
+        ocr_note = f"\n\n📝 Extracted Text:\n{extracted_text[:150]}..." if extracted_text and len(extracted_text) > 10 else ""
+        
         response = f"""✅ Grievance Registered Successfully!
 
 📋 Summary: {summary}
+
+🎯 Category: {category}
+⚡ Priority: {priority_label} ({priority}/10)
+🔢 Reference ID: {grievance_id[:8].upper()}{media_note}{ocr_note}
+
+Your concern has been registered and will be reviewed by our team within 24-48 hours.
+
+You'll receive updates as we work on resolving this.
+
+Thank you for reaching out! 🙏"""
 
 🎯 Category: {category}
 ⚡ Priority: {priority_label} ({priority}/10)
