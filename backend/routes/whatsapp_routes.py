@@ -9,9 +9,9 @@ import uuid
 import tempfile
 import json
 import base64
+import httpx
 from datetime import datetime, timezone
-from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent
-from emergentintegrations.llm.openai import OpenAISpeechToText
+from emergentintegrations.llm.chat import LlmChat, UserMessage, FileContentWithMimeType
 
 router = APIRouter()
 
@@ -19,6 +19,7 @@ TWILIO_ACCOUNT_SID = os.environ.get('TWILIO_ACCOUNT_SID')
 TWILIO_AUTH_TOKEN = os.environ.get('TWILIO_AUTH_TOKEN')
 TWILIO_WHATSAPP_NUMBER = os.environ.get('TWILIO_WHATSAPP_NUMBER')
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')
+SARVAM_API_KEY = os.environ.get('SARVAM_API_KEY')
 
 twilio_client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
 
