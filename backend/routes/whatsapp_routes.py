@@ -161,22 +161,27 @@ async def process_whatsapp_message(
                     audio_data = response.content
                     print(f"📥 Downloaded {len(audio_data)} bytes of audio")
                 
-                # Save to temp file - Whisper needs mp3, m4a, wav, webm
-                # Convert ogg to mp3 extension for Whisper compatibility
+                # WhatsApp voice messages are typically ogg/opus - Whisper supports ogg directly
                 if 'ogg' in media_content_type or 'opus' in media_content_type:
-                    file_ext = '.mp3'  # Whisper can handle ogg data with mp3 extension
+                    file_ext = '.ogg'  # Keep as ogg - Whisper supports it
                 elif 'mp3' in media_content_type or 'mpeg' in media_content_type:
                     file_ext = '.mp3'
                 elif 'm4a' in media_content_type:
                     file_ext = '.m4a'
-                else:
+                elif 'wav' in media_content_type:
                     file_ext = '.wav'
+                elif 'webm' in media_content_type:
+                    file_ext = '.webm'
+                elif 'flac' in media_content_type:
+                    file_ext = '.flac'
+                else:
+                    file_ext = '.ogg'  # Default to ogg for WhatsApp
                 
                 temp_path = os.path.join(tempfile.gettempdir(), f"voice_{uuid.uuid4()}{file_ext}")
                 
                 with open(temp_path, 'wb') as f:
                     f.write(audio_data)
-                print(f"📁 Saved audio to: {temp_path}")
+                print(f"📁 Saved audio to: {temp_path} (ext: {file_ext})")
                 
                 try:
                     # Use OpenAI Whisper for transcription
