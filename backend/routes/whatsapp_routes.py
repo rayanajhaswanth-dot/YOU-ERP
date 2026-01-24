@@ -276,12 +276,12 @@ async def process_whatsapp_message(
                         mime_type=mime_type
                     )
                     
-                    # Use GPT-4o for vision
+                    # Use Gemini for vision (FileContentWithMimeType only works with Gemini)
                     chat = LlmChat(
                         api_key=EMERGENT_LLM_KEY,
                         session_id=f"vision-{phone}-{uuid.uuid4()}",
                         system_message="You are an AI assistant analyzing images for Indian legislators. Extract any text (OCR) and describe what you see. Focus on identifying problems, complaints, or issues shown in the image."
-                    ).with_model("openai", "gpt-4o")
+                    ).with_model("gemini", "gemini-2.5-flash")
                     
                     vision_prompt = """Analyze this image sent by a constituent. Provide:
 
@@ -302,7 +302,7 @@ ISSUE: [the problem being reported]"""
                         file_contents=[image_content]
                     )
                     
-                    print(f"📤 Sending to GPT-4o for analysis...")
+                    print(f"📤 Sending to Gemini 2.5 Flash for analysis...")
                     vision_response = await chat.send_message(user_message)
                     print(f"👁️ Vision response: {vision_response[:200]}...")
                     
