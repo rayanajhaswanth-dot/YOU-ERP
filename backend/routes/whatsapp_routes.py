@@ -98,10 +98,10 @@ async def process_whatsapp_message(
         supabase = get_supabase()
         
         if not media_url and message.lower() in ['hi', 'hello', 'hey', 'namaste']:
-            return f"Namaste {name}! 🙏\n\nWelcome to YOU Governance ERP.\n\nI'm here to help you register grievances and get assistance.\n\nYou can:\n• Type your grievance\n• Send a photo of the issue\n• Send a photo of a handwritten letter\n\nI'll analyze it with AI and register it immediately.\n\nCommands:\n• 'status' - Check your grievances\n• 'help' - Get help"
+            return f"Namaste {name}! 🙏\n\nWelcome to YOU Governance ERP.\n\nI'm here to help you register grievances and get assistance.\n\nYou can:\n• Type your grievance\n• Send a voice message 🎤\n• Send a photo of the issue\n• Send a photo of a handwritten letter\n\nI'll analyze it with AI and register it immediately.\n\nCommands:\n• 'status' - Check your grievances\n• 'help' - Get help"
         
         if message.lower() == 'help':
-            return "📋 How to use:\n\n1. Type your problem/grievance\n2. OR send a photo (handwritten letter, damaged infrastructure, etc.)\n3. I'll analyze it with AI and assign priority\n4. Our team will respond within 24-48 hours\n\nYou can check status anytime by typing 'status'"
+            return "📋 How to use:\n\n1. Type your problem/grievance\n2. OR send a voice message 🎤 (Hindi, Tamil, Telugu, and more supported!)\n3. OR send a photo (handwritten letter, damaged infrastructure, etc.)\n4. I'll analyze it with AI and assign priority\n5. Our team will respond within 24-48 hours\n\n🎤 Voice messages in Indian languages will be automatically transcribed and translated!\n\nYou can check status anytime by typing 'status'"
         
         if message.lower() == 'status':
             grievances = supabase.table('grievances').select('*').order('created_at', desc=True).limit(3).execute()
