@@ -6,8 +6,9 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
 import { Badge } from '../components/ui/badge';
-import { Phone, MessageSquare, FileText, Loader2, AlertCircle, CheckCircle2, Clock, TrendingUp, AlertTriangle, Camera } from 'lucide-react';
+import { Phone, MessageSquare, FileText, Loader2, AlertCircle, CheckCircle2, Clock, TrendingUp, AlertTriangle, Camera, Mic } from 'lucide-react';
 import PhotoVerification from '../components/PhotoVerification';
+import VoiceRecorder from '../components/VoiceRecorder';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
