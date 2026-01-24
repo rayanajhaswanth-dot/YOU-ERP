@@ -265,13 +265,10 @@ async def process_whatsapp_message(
                 traceback.print_exc()
                 return "🎤 I received your voice message but encountered an error processing it. Please try:\n• Recording again with clear audio\n• Speaking closer to the microphone\n• Or typing your grievance instead"
         
-        # Process image if present - Use GPT-4o Vision
+        # Process image if present - Use Gemini Vision
         elif media_url and is_image:
-            print(f"📸 Processing image with GPT-4o Vision... Content-Type: {media_content_type}")
+            print(f"📸 Processing image with Gemini Vision... Content-Type: {media_content_type}")
             try:
-                import httpx
-                from emergentintegrations.llm.chat import FileContentWithMimeType
-                
                 # Download image from Twilio
                 print(f"📥 Downloading image from Twilio...")
                 async with httpx.AsyncClient() as client:
