@@ -8,8 +8,10 @@ import os
 import uuid
 import tempfile
 import json
+import base64
 from datetime import datetime, timezone
-from emergentintegrations.llm.chat import LlmChat, UserMessage, FileContentWithMimeType, ImageContent
+from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent
+from emergentintegrations.llm.openai import OpenAISpeechToText
 
 router = APIRouter()
 
