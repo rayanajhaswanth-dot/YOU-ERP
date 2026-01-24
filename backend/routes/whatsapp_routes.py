@@ -360,22 +360,32 @@ Respond ONLY with valid JSON, no markdown."""
         
         priority_label = "HIGH" if priority >= 8 else "MEDIUM" if priority >= 5 else "LOW"
         
-        media_note = "\nImage received and analyzed" if media_url else ""
-        ocr_note = "\n\nExtracted Text:\n{}...".format(extracted_text[:150]) if extracted_text and len(extracted_text) > 10 else ""
+        # Build media notes based on what was received
+        media_note = ""
+        if voice_transcription:
+            media_note = "\n🎤 Voice message transcribed"
+        elif media_url and media_content_type and media_content_type.startswith('image/'):
+            media_note = "\n📸 Image received and analyzed"
         
-        response = """Grievance Registered Successfully!
+        ocr_note = ""
+        if extracted_text and len(extracted_text) > 10:
+            ocr_note = "\n\nExtracted Text:\n{}...".format(extracted_text[:150])
+        elif voice_transcription and len(voice_transcription) > 10:
+            ocr_note = "\n\nTranscribed:\n{}...".format(voice_transcription[:200])
+        
+        response = """✅ Grievance Registered Successfully!
 
-Summary: {}
+📋 Summary: {}
 
-Category: {}
-Priority: {} ({}/10)
-Reference ID: {}{}{}
+📁 Category: {}
+⚡ Priority: {} ({}/10)
+🔖 Reference ID: {}{}{}
 
 Your concern has been registered and will be reviewed by our team within 24-48 hours.
 
 You'll receive updates as we work on resolving this.
 
-Thank you for reaching out!""".format(summary, category, priority_label, priority, grievance_id[:8].upper(), media_note, ocr_note)
+🙏 Thank you for reaching out!""".format(summary, category, priority_label, priority, grievance_id[:8].upper(), media_note, ocr_note)
         
         return response
         
