@@ -220,30 +220,32 @@ Respond ONLY with a valid JSON object (no markdown, no code blocks):
         
         # Process image if present (existing logic)
         elif media_url and media_content_type and media_content_type.startswith('image/'):
-            print("📸 Processing image with Gemini Vision...")
+            print(f"📸 Processing image with Gemini Vision... Content-Type: {media_content_type}")
             try:
                 import httpx
                 import base64
-                from emergentintegrations.llm.chat import ImageContent
                 
                 # Download image from Twilio
+                print(f"📥 Downloading image from: {media_url[:50]}...")
                 async with httpx.AsyncClient() as client:
                     auth = (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
                     response = await client.get(media_url, auth=auth, timeout=30.0)
                     image_data = response.content
+                    print(f"📥 Downloaded {len(image_data)} bytes")
                 
                 # Convert to base64 for Gemini
                 image_base64 = base64.b64encode(image_data).decode('utf-8')
+                print(f"📸 Converted to base64: {len(image_base64)} chars")
                 
                 # Create ImageContent object
                 image_content = ImageContent(image_base64=image_base64)
                 
-                # Use Gemini Vision to analyze the image
+                # Use GPT-4o for vision (more reliable)
                 chat = LlmChat(
                     api_key=EMERGENT_LLM_KEY,
                     session_id=f"vision-{phone}-{uuid.uuid4()}",
                     system_message="You are an AI assistant analyzing images for Indian legislators. Extract any text (OCR) and describe what you see. Focus on identifying problems, complaints, or issues shown in the image."
-                ).with_model("gemini", "gemini-2.5-flash")
+                ).with_model("openai", "gpt-4o")
                 
                 vision_prompt = """Analyze this image sent by a constituent. Provide:
 
@@ -264,8 +266,9 @@ ISSUE: [the problem being reported]"""
                     file_contents=[image_content]
                 )
                 
+                print(f"📤 Sending to GPT-4o for analysis...")
                 vision_response = await chat.send_message(user_message)
-                print(f"👁️ Vision response: {vision_response}")
+                print(f"👁️ Vision response: {vision_response[:200]}...")
                 
                 # Parse the vision response
                 if "TEXT:" in vision_response:
