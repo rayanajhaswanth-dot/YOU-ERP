@@ -157,3 +157,96 @@ Respond in JSON format with keys: score, emotion, topic"""
         return {"sentiment": response}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Sentiment analysis failed: {str(e)}")
+
+
+@router.post("/transcribe")
+async def transcribe_audio(
+    audio: UploadFile = File(...),
+    current_user: TokenData = Depends(get_current_user)
+):
+    """
+    Transcribe audio file using Gemini 2.0 Flash.
+    Supports voice notes in local Indian languages and provides translation.
+    Returns: { original: str, english_translation: str, language_detected: str }
+    """
+    try:
+        # Validate file type
+        allowed_types = ['audio/webm', 'audio/wav', 'audio/mp3', 'audio/mpeg', 'audio/ogg', 'audio/m4a', 'audio/x-m4a']
+        content_type = audio.content_type or 'audio/webm'
+        
+        # Create a temporary file to store the audio
+        temp_dir = tempfile.gettempdir()
+        file_extension = '.webm' if 'webm' in content_type else '.wav'
+        temp_filename = f"{uuid.uuid4()}{file_extension}"
+        temp_path = os.path.join(temp_dir, temp_filename)
+        
+        # Save the uploaded file
+        content = await audio.read()
+        with open(temp_path, 'wb') as f:
+            f.write(content)
+        
+        try:
+            # Use Gemini 2.0 Flash for audio transcription
+            chat = LlmChat(
+                api_key=EMERGENT_LLM_KEY,
+                session_id=f"transcribe-{current_user.user_id}-{uuid.uuid4()}",
+                system_message="You are an expert audio transcription assistant specializing in Indian languages. You can accurately transcribe audio in Hindi, Tamil, Telugu, Kannada, Malayalam, Bengali, Marathi, Gujarati, Punjabi, and other Indian regional languages."
+            ).with_model("gemini", "gemini-2.0-flash")
+            
+            # Create file content for the audio
+            audio_file = FileContentWithMimeType(
+                file_path=temp_path,
+                mime_type=content_type if content_type in allowed_types else 'audio/webm'
+            )
+            
+            transcription_prompt = """Listen to this audio recording carefully. Transcribe it exactly as spoken.
+
+If the audio is in a local Indian language (Hindi, Tamil, Telugu, Kannada, Malayalam, Bengali, Marathi, Gujarati, Punjabi, or any other regional language):
+1. Provide the original transcription in the native script or romanized form
+2. Provide an accurate English translation
+
+Respond ONLY with a valid JSON object in this exact format (no markdown, no code blocks):
+{
+    "original": "the exact transcription of what was spoken",
+    "english_translation": "the English translation (same as original if already in English)",
+    "language_detected": "the detected language (e.g., Hindi, Tamil, English, Telugu, etc.)"
+}"""
+            
+            user_message = UserMessage(
+                text=transcription_prompt,
+                file_contents=[audio_file]
+            )
+            
+            response = await chat.send_message(user_message)
+            
+            # Parse the JSON response
+            try:
+                # Clean up response - remove markdown code blocks if present
+                clean_response = response.strip()
+                if clean_response.startswith('```'):
+                    clean_response = clean_response.split('\n', 1)[1]
+                    if clean_response.endswith('```'):
+                        clean_response = clean_response[:-3]
+                    clean_response = clean_response.strip()
+                
+                result = json.loads(clean_response)
+                return {
+                    "original": result.get("original", ""),
+                    "english_translation": result.get("english_translation", ""),
+                    "language_detected": result.get("language_detected", "Unknown")
+                }
+            except json.JSONDecodeError:
+                # If JSON parsing fails, return raw response as original
+                return {
+                    "original": response,
+                    "english_translation": response,
+                    "language_detected": "Unknown"
+                }
+                
+        finally:
+            # Clean up temp file
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+                
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Audio transcription failed: {str(e)}")
