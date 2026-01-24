@@ -91,8 +91,8 @@ async def get_dashboard_stats(current_user: TokenData = Depends(get_current_user
     grievances = supabase.table('grievances').select('status').eq('politician_id', current_user.politician_id).execute()
     posts = supabase.table('posts').select('status').eq('politician_id', current_user.politician_id).execute()
     
-    resolved_grievances = len([g for g in grievances.data if g['status'] == 'resolved'])
-    published_posts = len([p for p in posts.data if p['status'] == 'published'])
+    resolved_grievances = len([g for g in grievances.data if g.get('status', '').upper() == 'RESOLVED'])
+    published_posts = len([p for p in posts.data if p.get('status', '').upper() == 'PUBLISHED'])
     
     return {
         "total_grievances": len(grievances.data),
