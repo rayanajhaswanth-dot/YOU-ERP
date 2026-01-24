@@ -305,38 +305,43 @@ ISSUE: [the problem being reported]"""
                     print(f"📤 Sending to GPT-4o for analysis...")
                     vision_response = await chat.send_message(user_message)
                     print(f"👁️ Vision response: {vision_response[:200]}...")
-                
-                # Parse the vision response
-                if "TEXT:" in vision_response:
-                    text_part = vision_response.split("TEXT:")[1].split("DESCRIPTION:")[0].strip()
-                    extracted_text = text_part if "No text found" not in text_part else ""
-                
-                if "DESCRIPTION:" in vision_response:
-                    desc_part = vision_response.split("DESCRIPTION:")[1].split("ISSUE:")[0].strip()
-                    image_description = desc_part
-                
-                if "ISSUE:" in vision_response:
-                    issue_part = vision_response.split("ISSUE:")[1].strip()
-                    if issue_part and issue_part != "":
-                        message = issue_part
+                    
+                    # Parse the vision response
+                    if "TEXT:" in vision_response:
+                        text_part = vision_response.split("TEXT:")[1].split("DESCRIPTION:")[0].strip()
+                        extracted_text = text_part if "No text found" not in text_part else ""
+                    
+                    if "DESCRIPTION:" in vision_response:
+                        desc_part = vision_response.split("DESCRIPTION:")[1].split("ISSUE:")[0].strip()
+                        image_description = desc_part
+                    
+                    if "ISSUE:" in vision_response:
+                        issue_part = vision_response.split("ISSUE:")[1].strip()
+                        if issue_part and issue_part != "":
+                            message = issue_part
+                        elif image_description:
+                            message = image_description
+                    
+                    # Combine extracted text with image description
+                    if extracted_text and image_description:
+                        message = f"{extracted_text}\n\n[Image shows: {image_description}]"
+                    elif extracted_text:
+                        message = extracted_text
                     elif image_description:
-                        message = image_description
-                
-                # Combine extracted text with image description
-                if extracted_text and image_description:
-                    message = f"{extracted_text}\n\n[Image shows: {image_description}]"
-                elif extracted_text:
-                    message = extracted_text
-                elif image_description:
-                    message = f"[Photo received] {image_description}"
-                
-                print(f"✅ Extracted from image: {message[:100]}...")
+                        message = f"[Photo received] {image_description}"
+                    
+                    print(f"✅ Extracted from image: {message[:100]}...")
+                    
+                finally:
+                    # Clean up temp file
+                    if os.path.exists(temp_path):
+                        os.remove(temp_path)
                 
             except Exception as e:
                 print(f"❌ Image processing error: {e}")
                 import traceback
                 traceback.print_exc()
-                return "I received your image but encountered an error processing it. Please try sending it again or describe the issue in text."
+                return "📸 I received your image but encountered an error processing it. Please try:\n• Sending the image again\n• Or describe the issue in text"
         
         # If still no message after image processing
         if not message or message.strip() == "":
