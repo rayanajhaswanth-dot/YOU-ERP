@@ -123,8 +123,30 @@ async def process_whatsapp_message(
         image_description = ""
         voice_transcription = ""
         
+        # Determine media type - check both content-type and URL extension
+        is_image = False
+        is_audio = False
+        
+        if media_url and media_content_type:
+            # Check content type first
+            if media_content_type.startswith('image/'):
+                is_image = True
+            elif media_content_type.startswith('audio/'):
+                is_audio = True
+            
+            # Also check URL extension as fallback (Twilio sometimes sends wrong content-type)
+            media_url_lower = media_url.lower()
+            if any(ext in media_url_lower for ext in ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.heic']):
+                is_image = True
+                is_audio = False
+            elif any(ext in media_url_lower for ext in ['.ogg', '.mp3', '.wav', '.m4a', '.opus', '.amr']):
+                is_audio = True
+                is_image = False
+        
+        print(f"📊 Media detection: is_image={is_image}, is_audio={is_audio}, content_type={media_content_type}")
+        
         # Check if it's an audio/voice message
-        if media_url and media_content_type and media_content_type.startswith('audio/'):
+        if media_url and is_audio:
             print(f"🎤 Processing voice message... Content-Type: {media_content_type}")
             try:
                 import httpx
