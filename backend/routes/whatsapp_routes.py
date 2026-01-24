@@ -85,7 +85,9 @@ async def process_whatsapp_message(
     phone: str,
     message: str,
     name: str,
-    message_sid: str
+    message_sid: str,
+    media_url: str = None,
+    media_content_type: str = None
 ) -> str:
     """
     Process incoming WhatsApp message with AI triage
