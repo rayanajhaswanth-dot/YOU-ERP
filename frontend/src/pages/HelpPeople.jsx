@@ -6,7 +6,8 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
 import { Badge } from '../components/ui/badge';
-import { Phone, MessageSquare, FileText, Loader2, AlertCircle, CheckCircle2, Clock, TrendingUp, AlertTriangle } from 'lucide-react';
+import { Phone, MessageSquare, FileText, Loader2, AlertCircle, CheckCircle2, Clock, TrendingUp, AlertTriangle, Camera } from 'lucide-react';
+import PhotoVerification from '../components/PhotoVerification';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -16,6 +17,8 @@ export default function HelpPeople({ user }) {
   const [topPriority, setTopPriority] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [showVerification, setShowVerification] = useState(false);
+  const [selectedGrievance, setSelectedGrievance] = useState(null);
   const [formData, setFormData] = useState({
     village: '',
     description: '',
@@ -476,15 +479,29 @@ export default function HelpPeople({ user }) {
                       </Button>
                     )}
                     {grievance.status === 'IN_PROGRESS' && (
-                      <Button
-                        onClick={() => updateStatus(grievance.id, 'RESOLVED')}
-                        data-testid={`resolve-${grievance.id}`}
-                        size="sm"
-                        className="bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 rounded-full pill-button"
-                      >
-                        <CheckCircle2 className="h-3 w-3 mr-1" />
-                        Mark Resolved
-                      </Button>
+                      <>
+                        <Button
+                          onClick={() => {
+                            setSelectedGrievance(grievance);
+                            setShowVerification(true);
+                          }}
+                          data-testid={`verify-${grievance.id}`}
+                          size="sm"
+                          className="bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 rounded-full pill-button"
+                        >
+                          <Camera className="h-3 w-3 mr-1" />
+                          Photo Verify
+                        </Button>
+                        <Button
+                          onClick={() => updateStatus(grievance.id, 'RESOLVED')}
+                          data-testid={`resolve-${grievance.id}`}
+                          size="sm"
+                          className="bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 rounded-full pill-button"
+                        >
+                          <CheckCircle2 className="h-3 w-3 mr-1" />
+                          Mark Resolved
+                        </Button>
+                      </>
                     )}
                   </div>
                 </motion.div>
