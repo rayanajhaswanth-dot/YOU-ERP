@@ -88,8 +88,8 @@ async def update_grievance(
     
     update_data = {}
     if data.status:
-        update_data['status'] = data.status
-        if data.status == 'resolved':
+        update_data['status'] = data.status.upper()
+        if data.status.upper() == 'RESOLVED':
             update_data['resolved_at'] = datetime.now(timezone.utc).isoformat()
     if data.resolution_notes:
         update_data['resolution_notes'] = data.resolution_notes
@@ -108,9 +108,9 @@ async def get_grievance_stats(current_user: TokenData = Depends(get_current_user
     all_grievances = supabase.table('grievances').select('status').eq('politician_id', current_user.politician_id).execute()
     
     total = len(all_grievances.data)
-    pending = len([g for g in all_grievances.data if g['status'] == 'pending'])
-    in_progress = len([g for g in all_grievances.data if g['status'] == 'in_progress'])
-    resolved = len([g for g in all_grievances.data if g['status'] == 'resolved'])
+    pending = len([g for g in all_grievances.data if g.get('status', '').upper() == 'PENDING'])
+    in_progress = len([g for g in all_grievances.data if g.get('status', '').upper() == 'IN_PROGRESS'])
+    resolved = len([g for g in all_grievances.data if g.get('status', '').upper() == 'RESOLVED'])
     
     return {
         "total": total,
