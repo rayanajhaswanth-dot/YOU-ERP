@@ -147,22 +147,31 @@ async def process_whatsapp_message(
         
         print(f"📊 Media detection: is_image={is_image}, is_audio={is_audio}, content_type={media_content_type}")
         
-        # Check if it's an audio/voice message
+        # Check if it's an audio/voice message - Use OpenAI Whisper for transcription
         if media_url and is_audio:
-            print(f"🎤 Processing voice message... Content-Type: {media_content_type}")
+            print(f"🎤 Processing voice message with OpenAI Whisper... Content-Type: {media_content_type}")
             try:
                 import httpx
                 
                 # Download audio from Twilio
-                print(f"📥 Downloading audio from: {media_url[:50]}...")
+                print(f"📥 Downloading audio from Twilio...")
                 async with httpx.AsyncClient() as client:
                     auth = (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
                     response = await client.get(media_url, auth=auth, timeout=60.0)
                     audio_data = response.content
                     print(f"📥 Downloaded {len(audio_data)} bytes of audio")
                 
-                # Save to temp file for Gemini processing
-                file_ext = '.ogg' if 'ogg' in media_content_type else '.mp3' if 'mp3' in media_content_type or 'mpeg' in media_content_type else '.wav'
+                # Save to temp file - Whisper needs mp3, m4a, wav, webm
+                # Convert ogg to mp3 extension for Whisper compatibility
+                if 'ogg' in media_content_type or 'opus' in media_content_type:
+                    file_ext = '.mp3'  # Whisper can handle ogg data with mp3 extension
+                elif 'mp3' in media_content_type or 'mpeg' in media_content_type:
+                    file_ext = '.mp3'
+                elif 'm4a' in media_content_type:
+                    file_ext = '.m4a'
+                else:
+                    file_ext = '.wav'
+                
                 temp_path = os.path.join(tempfile.gettempdir(), f"voice_{uuid.uuid4()}{file_ext}")
                 
                 with open(temp_path, 'wb') as f:
@@ -170,70 +179,41 @@ async def process_whatsapp_message(
                 print(f"📁 Saved audio to: {temp_path}")
                 
                 try:
-                    # Use Gemini 2.5 Flash for voice transcription (supports audio files)
-                    chat = LlmChat(
-                        api_key=EMERGENT_LLM_KEY,
-                        session_id=f"voice-{phone}-{uuid.uuid4()}",
-                        system_message="You are an expert audio transcription assistant specializing in Indian languages. You can accurately transcribe audio in Hindi, Tamil, Telugu, Kannada, Malayalam, Bengali, Marathi, Gujarati, Punjabi, and other Indian regional languages."
-                    ).with_model("gemini", "gemini-2.5-flash")
+                    # Use OpenAI Whisper for transcription
+                    stt = OpenAISpeechToText(api_key=EMERGENT_LLM_KEY)
                     
-                    # Create file content for audio
-                    audio_file = FileContentWithMimeType(
-                        file_path=temp_path,
-                        mime_type=media_content_type
-                    )
+                    with open(temp_path, 'rb') as audio_file:
+                        print(f"📤 Sending to OpenAI Whisper for transcription...")
+                        whisper_response = await stt.transcribe(
+                            file=audio_file,
+                            model="whisper-1",
+                            response_format="verbose_json"
+                        )
                     
-                    transcription_prompt = """Listen to this voice message from a constituent. Transcribe it exactly as spoken.
-
-If the audio is in a local Indian language (Hindi, Tamil, Telugu, Kannada, Malayalam, Bengali, Marathi, Gujarati, Punjabi, or any other regional language):
-1. Provide the original transcription
-2. Provide an accurate English translation
-
-Respond ONLY with a valid JSON object (no markdown, no code blocks):
-{
-    "original": "the exact transcription of what was spoken",
-    "english_translation": "the English translation (same as original if already in English)",
-    "language_detected": "the detected language"
-}"""
+                    transcribed_text = whisper_response.text
+                    detected_language = getattr(whisper_response, 'language', 'unknown')
+                    print(f"✅ Whisper transcribed: {transcribed_text[:100]}... Language: {detected_language}")
                     
-                    user_msg = UserMessage(
-                        text=transcription_prompt,
-                        file_contents=[audio_file]
-                    )
-                    
-                    print(f"📤 Sending audio to Gemini 2.5 Flash for transcription...")
-                    transcription_response = await chat.send_message(user_msg)
-                    print(f"🎤 Voice transcription response: {transcription_response[:200]}...")
-                    
-                    # Parse the transcription response
-                    try:
-                        clean_response = transcription_response.strip()
-                        if clean_response.startswith('```'):
-                            clean_response = clean_response.split('\n', 1)[1]
-                            if clean_response.endswith('```'):
-                                clean_response = clean_response[:-3]
-                            clean_response = clean_response.strip()
+                    # If not English, translate using GPT
+                    if detected_language and detected_language.lower() not in ['english', 'en']:
+                        print(f"🌐 Translating from {detected_language} to English...")
+                        chat = LlmChat(
+                            api_key=EMERGENT_LLM_KEY,
+                            session_id=f"translate-{phone}-{uuid.uuid4()}",
+                            system_message="You are a translator specializing in Indian languages."
+                        ).with_model("openai", "gpt-4o-mini")
                         
-                        transcription_data = json.loads(clean_response)
-                        original_text = transcription_data.get("original", "")
-                        english_text = transcription_data.get("english_translation", original_text)
-                        detected_lang = transcription_data.get("language_detected", "Unknown")
+                        translate_msg = UserMessage(
+                            text=f"Translate this {detected_language} text to English. Only provide the translation, nothing else:\n\n{transcribed_text}"
+                        )
+                        english_translation = await chat.send_message(translate_msg)
                         
-                        # Use English translation as the message for grievance processing
-                        if detected_lang.lower() != "english" and english_text:
-                            voice_transcription = f"[Voice message in {detected_lang}]\nOriginal: {original_text}\n\nEnglish: {english_text}"
-                            message = english_text
-                        else:
-                            voice_transcription = f"[Voice message] {original_text}"
-                            message = original_text
-                        
-                        print(f"✅ Voice transcribed: {message[:100]}...")
-                        
-                    except json.JSONDecodeError:
-                        # If JSON parsing fails, use raw response
-                        voice_transcription = f"[Voice message] {transcription_response}"
-                        message = transcription_response
-                        print(f"⚠️ Could not parse JSON, using raw response")
+                        voice_transcription = f"[Voice in {detected_language}]\nOriginal: {transcribed_text}\n\nEnglish: {english_translation}"
+                        message = english_translation
+                        print(f"✅ Translated: {english_translation[:100]}...")
+                    else:
+                        voice_transcription = f"[Voice message] {transcribed_text}"
+                        message = transcribed_text
                     
                 finally:
                     # Clean up temp file
@@ -246,15 +226,14 @@ Respond ONLY with a valid JSON object (no markdown, no code blocks):
                 traceback.print_exc()
                 return "🎤 I received your voice message but encountered an error processing it. Please try:\n• Recording again with clear audio\n• Speaking closer to the microphone\n• Or typing your grievance instead"
         
-        # Process image if present
+        # Process image if present - Use GPT-4o Vision
         elif media_url and is_image:
-            print(f"📸 Processing image with Gemini Vision... Content-Type: {media_content_type}")
+            print(f"📸 Processing image with GPT-4o Vision... Content-Type: {media_content_type}")
             try:
                 import httpx
-                import base64
                 
                 # Download image from Twilio
-                print(f"📥 Downloading image from: {media_url[:50]}...")
+                print(f"📥 Downloading image from Twilio...")
                 async with httpx.AsyncClient() as client:
                     auth = (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
                     response = await client.get(media_url, auth=auth, timeout=30.0)
