@@ -165,34 +165,39 @@ export default function HelpPeople({ user }) {
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">Constituent Name</label>
+                <label className="block text-sm font-medium text-slate-300 mb-2">Village/Area</label>
                 <Input
-                  value={formData.constituent_name}
-                  onChange={(e) => setFormData({ ...formData, constituent_name: e.target.value })}
-                  data-testid="constituent-name-input"
+                  value={formData.village}
+                  onChange={(e) => setFormData({ ...formData, village: e.target.value })}
+                  data-testid="village-input"
                   className="bg-slate-950 border-slate-800 focus:border-orange-500 rounded-xl h-12 text-slate-200"
-                  placeholder="Full name"
+                  placeholder="Village or area name"
                   required
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">Phone Number</label>
-                <Input
-                  value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  data-testid="phone-input"
-                  className="bg-slate-950 border-slate-800 focus:border-orange-500 rounded-xl h-12 text-slate-200"
-                  placeholder="+91 XXXXX XXXXX"
-                  required
-                />
+                <label className="block text-sm font-medium text-slate-300 mb-2">Issue Type</label>
+                <select
+                  value={formData.issue_type}
+                  onChange={(e) => setFormData({ ...formData, issue_type: e.target.value })}
+                  data-testid="issue-type-select"
+                  className="w-full bg-slate-950 border border-slate-800 focus:border-orange-500 rounded-xl h-12 text-slate-200 px-4"
+                >
+                  <option value="Infrastructure">Infrastructure</option>
+                  <option value="Healthcare">Healthcare</option>
+                  <option value="Education">Education</option>
+                  <option value="Employment">Employment</option>
+                  <option value="Social Welfare">Social Welfare</option>
+                  <option value="Other">Other</option>
+                </select>
               </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">Grievance Message</label>
+              <label className="block text-sm font-medium text-slate-300 mb-2">Grievance Description</label>
               <Textarea
-                value={formData.message}
-                onChange={(e) => setFormData({ ...formData, message: e.target.value })}
-                data-testid="message-textarea"
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                data-testid="description-textarea"
                 className="bg-slate-950 border-slate-800 focus:border-orange-500 rounded-xl text-slate-200 min-h-[120px]"
                 placeholder="Describe the issue..."
                 required
@@ -243,28 +248,28 @@ export default function HelpPeople({ user }) {
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">
-                      <h4 className="font-semibold text-slate-200 text-lg">{grievance.constituent_name}</h4>
+                      <h4 className="font-semibold text-slate-200 text-lg">{grievance.village || 'Unknown Location'}</h4>
                       <Badge className={getStatusColor(grievance.status)}>
-                        {grievance.status.replace('_', ' ')}
+                        {(grievance.status || 'pending').replace('_', ' ')}
                       </Badge>
-                      <span className={`text-sm font-semibold ${getPriorityColor(grievance.priority)}`}>
-                        Priority: {grievance.priority}/10
+                      <span className={`text-sm font-semibold ${getPriorityColor(grievance.ai_priority || 5)}`}>
+                        Priority: {grievance.ai_priority || 5}/10
                       </span>
                     </div>
                     <div className="flex items-center gap-4 text-sm text-slate-400 mb-3">
                       <span className="flex items-center gap-1">
-                        <Phone className="h-3 w-3" />
-                        {grievance.phone}
+                        <FileText className="h-3 w-3" />
+                        {grievance.issue_type || 'Other'}
                       </span>
-                      <span>Source: {grievance.source}</span>
+                      <span>ID: {grievance.id?.substring(0, 8).toUpperCase()}</span>
                     </div>
-                    <p className="text-slate-300">{grievance.message}</p>
+                    <p className="text-slate-300">{grievance.description || 'No description'}</p>
                   </div>
                 </div>
                 <div className="flex gap-2 mt-4">
-                  {grievance.status === 'pending' && (
+                  {grievance.status === 'PENDING' && (
                     <Button
-                      onClick={() => updateStatus(grievance.id, 'in_progress')}
+                      onClick={() => updateStatus(grievance.id, 'IN_PROGRESS')}
                       data-testid={`start-work-${grievance.id}`}
                       size="sm"
                       className="bg-sky-500/10 text-sky-400 hover:bg-sky-500/20 rounded-full pill-button"
@@ -272,9 +277,9 @@ export default function HelpPeople({ user }) {
                       Start Work
                     </Button>
                   )}
-                  {grievance.status === 'in_progress' && (
+                  {grievance.status === 'IN_PROGRESS' && (
                     <Button
-                      onClick={() => updateStatus(grievance.id, 'resolved')}
+                      onClick={() => updateStatus(grievance.id, 'RESOLVED')}
                       data-testid={`resolve-${grievance.id}`}
                       size="sm"
                       className="bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 rounded-full pill-button"
