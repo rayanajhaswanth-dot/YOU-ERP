@@ -6,7 +6,18 @@ import pytest
 import requests
 import os
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
+# Get the backend URL from frontend .env file
+def get_backend_url():
+    try:
+        with open('/app/frontend/.env', 'r') as f:
+            for line in f:
+                if line.startswith('REACT_APP_BACKEND_URL='):
+                    return line.split('=', 1)[1].strip().rstrip('/')
+    except:
+        pass
+    return 'https://legiflow.preview.emergentagent.com'
+
+BASE_URL = get_backend_url()
 
 
 class TestWhatsAppStatus:
