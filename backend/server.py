@@ -12,6 +12,16 @@ load_dotenv(ROOT_DIR / '.env')
 
 app = FastAPI(title="YOU - Governance ERP", version="1.0.0")
 
+# CORS middleware must be added BEFORE including routers
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["*"],
+)
+
 api_router = APIRouter(prefix="/api")
 
 api_router.include_router(auth_routes.router, prefix="/auth", tags=["auth"])
@@ -27,14 +37,6 @@ async def root():
     return {"message": "YOU - Governance ERP API", "version": "1.0.0"}
 
 app.include_router(api_router)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 logging.basicConfig(
     level=logging.INFO,
