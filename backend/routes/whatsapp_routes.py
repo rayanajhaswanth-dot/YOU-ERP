@@ -224,6 +224,7 @@ Respond ONLY with a valid JSON object (no markdown, no code blocks):
             try:
                 import httpx
                 import base64
+                from emergentintegrations.llm.chat import ImageContent
                 
                 # Download image from Twilio
                 async with httpx.AsyncClient() as client:
@@ -234,12 +235,15 @@ Respond ONLY with a valid JSON object (no markdown, no code blocks):
                 # Convert to base64 for Gemini
                 image_base64 = base64.b64encode(image_data).decode('utf-8')
                 
+                # Create ImageContent object
+                image_content = ImageContent(image_base64=image_base64)
+                
                 # Use Gemini Vision to analyze the image
                 chat = LlmChat(
                     api_key=EMERGENT_LLM_KEY,
-                    session_id=f"vision-{phone}",
+                    session_id=f"vision-{phone}-{uuid.uuid4()}",
                     system_message="You are an AI assistant analyzing images for Indian legislators. Extract any text (OCR) and describe what you see. Focus on identifying problems, complaints, or issues shown in the image."
-                ).with_model("gemini", "gemini-3-flash-preview")
+                ).with_model("gemini", "gemini-2.5-flash")
                 
                 vision_prompt = """Analyze this image sent by a constituent. Provide:
 
@@ -257,7 +261,7 @@ ISSUE: [the problem being reported]"""
                 
                 user_message = UserMessage(
                     text=vision_prompt,
-                    image_base64=image_base64
+                    file_contents=[image_content]
                 )
                 
                 vision_response = await chat.send_message(user_message)
