@@ -1,10 +1,13 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
 from pydantic import BaseModel
 from typing import Optional
 from auth import get_current_user, TokenData
-from emergentintegrations.llm.chat import LlmChat, UserMessage
+from emergentintegrations.llm.chat import LlmChat, UserMessage, FileContentWithMimeType
 import os
 import asyncio
+import tempfile
+import uuid
+import json
 
 router = APIRouter()
 
