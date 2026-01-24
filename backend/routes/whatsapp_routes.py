@@ -244,8 +244,8 @@ Respond ONLY with a valid JSON object (no markdown, no code blocks):
                 traceback.print_exc()
                 return "🎤 I received your voice message but encountered an error processing it. Please try:\n• Recording again with clear audio\n• Speaking closer to the microphone\n• Or typing your grievance instead"
         
-        # Process image if present (existing logic)
-        elif media_url and media_content_type and media_content_type.startswith('image/'):
+        # Process image if present
+        elif media_url and is_image:
             print(f"📸 Processing image with Gemini Vision... Content-Type: {media_content_type}")
             try:
                 import httpx
