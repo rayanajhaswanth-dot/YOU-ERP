@@ -245,14 +245,29 @@ async def process_whatsapp_message(
                     image_data = response.content
                     print(f"📥 Downloaded {len(image_data)} bytes")
                 
-                # Convert to base64 for Gemini
-                image_base64 = base64.b64encode(image_data).decode('utf-8')
-                print(f"📸 Converted to base64: {len(image_base64)} chars")
+                # Convert to base64 with proper data URL format for GPT-4o
+                image_base64_raw = base64.b64encode(image_data).decode('utf-8')
                 
-                # Create ImageContent object
+                # Determine MIME type for data URL
+                if 'jpeg' in media_content_type or 'jpg' in media_content_type:
+                    mime_type = 'image/jpeg'
+                elif 'png' in media_content_type:
+                    mime_type = 'image/png'
+                elif 'gif' in media_content_type:
+                    mime_type = 'image/gif'
+                elif 'webp' in media_content_type:
+                    mime_type = 'image/webp'
+                else:
+                    mime_type = 'image/jpeg'  # Default to jpeg
+                
+                # Create proper base64 data URL
+                image_base64 = f"data:{mime_type};base64,{image_base64_raw}"
+                print(f"📸 Created data URL with mime type: {mime_type}")
+                
+                # Create ImageContent object with full data URL
                 image_content = ImageContent(image_base64=image_base64)
                 
-                # Use GPT-4o for vision (more reliable)
+                # Use GPT-4o for vision
                 chat = LlmChat(
                     api_key=EMERGENT_LLM_KEY,
                     session_id=f"vision-{phone}-{uuid.uuid4()}",
