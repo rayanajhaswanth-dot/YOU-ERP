@@ -6,8 +6,10 @@ from twilio.rest import Client
 from twilio.twiml.messaging_response import MessagingResponse
 import os
 import uuid
+import tempfile
+import json
 from datetime import datetime, timezone
-from emergentintegrations.llm.chat import LlmChat, UserMessage
+from emergentintegrations.llm.chat import LlmChat, UserMessage, FileContentWithMimeType
 
 router = APIRouter()
 
