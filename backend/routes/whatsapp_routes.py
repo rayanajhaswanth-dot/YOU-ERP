@@ -142,7 +142,7 @@ async def process_whatsapp_message(
                     system_message="You are an AI assistant analyzing images for Indian legislators. Extract any text (OCR) and describe what you see. Focus on identifying problems, complaints, or issues shown in the image."
                 ).with_model("gemini", "gemini-3-flash-preview")
                 
-                vision_prompt = f\"\"\"Analyze this image sent by a constituent. Provide:
+                vision_prompt = """Analyze this image sent by a constituent. Provide:
 
 1. **Extracted Text** (OCR): If there's any handwritten or printed text, extract it completely
 2. **Image Description**: Describe what you see (damaged roads, water issues, infrastructure problems, etc.)
@@ -154,7 +154,7 @@ If it's a photo of an issue (broken road, water leak, etc.), describe it clearly
 Respond in this format:
 TEXT: [extracted text here, or "No text found"]
 DESCRIPTION: [what you see in the image]
-ISSUE: [the problem being reported]\"\"\"
+ISSUE: [the problem being reported]"""
                 
                 user_message = UserMessage(
                     text=vision_prompt,
