@@ -352,122 +352,17 @@ SCHEMA:
                     return "🎤 I received your voice message but encountered an error processing it. Please try:\n• Recording again with clear audio\n• Speaking closer to the microphone\n• Or typing your grievance instead"
                 else:
                     return "📸 I received your image but encountered an error processing it. Please try:\n• Sending a clearer image\n• Or describing the issue in text"
-            try:
-                # Download image from Twilio
-                print(f"📥 Downloading image from Twilio...")
-                async with httpx.AsyncClient() as client:
-                    auth = (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
-                    response = await client.get(media_url, auth=auth, timeout=30.0)
-                    image_data = response.content
-                    print(f"📥 Downloaded {len(image_data)} bytes")
-                
-                # Determine file extension and MIME type
-                if 'jpeg' in media_content_type or 'jpg' in media_content_type:
-                    file_ext = '.jpg'
-                    mime_type = 'image/jpeg'
-                elif 'png' in media_content_type:
-                    file_ext = '.png'
-                    mime_type = 'image/png'
-                elif 'webp' in media_content_type:
-                    file_ext = '.webp'
-                    mime_type = 'image/webp'
-                elif 'gif' in media_content_type:
-                    file_ext = '.gif'
-                    mime_type = 'image/gif'
-                else:
-                    file_ext = '.jpg'  # Default to jpg
-                    mime_type = 'image/jpeg'
-                
-                # Save to temp file
-                temp_path = os.path.join(tempfile.gettempdir(), f"image_{uuid.uuid4()}{file_ext}")
-                with open(temp_path, 'wb') as f:
-                    f.write(image_data)
-                print(f"📁 Saved image to: {temp_path} (mime: {mime_type})")
-                
-                try:
-                    # Create FileContentWithMimeType for the image
-                    image_content = FileContentWithMimeType(
-                        file_path=temp_path,
-                        mime_type=mime_type
-                    )
-                    
-                    # Use Gemini for vision (FileContentWithMimeType only works with Gemini)
-                    chat = LlmChat(
-                        api_key=EMERGENT_LLM_KEY,
-                        session_id=f"vision-{phone}-{uuid.uuid4()}",
-                        system_message="You are an AI assistant analyzing images for Indian legislators. Extract any text (OCR) and describe what you see. Focus on identifying problems, complaints, or issues shown in the image."
-                    ).with_model("gemini", "gemini-2.5-flash")
-                    
-                    vision_prompt = """Analyze this image sent by a constituent. Provide:
-
-1. **Extracted Text** (OCR): If there's any handwritten or printed text, extract it completely
-2. **Image Description**: Describe what you see (damaged roads, water issues, infrastructure problems, etc.)
-3. **Issue Identified**: What problem or grievance is being reported?
-
-If it's a handwritten letter, extract the full text.
-If it's a photo of an issue (broken road, water leak, etc.), describe it clearly.
-
-Respond in this format:
-TEXT: [extracted text here, or "No text found"]
-DESCRIPTION: [what you see in the image]
-ISSUE: [the problem being reported]"""
-                    
-                    user_message = UserMessage(
-                        text=vision_prompt,
-                        file_contents=[image_content]
-                    )
-                    
-                    print(f"📤 Sending to Gemini 2.5 Flash for analysis...")
-                    vision_response = await chat.send_message(user_message)
-                    print(f"👁️ Vision response: {vision_response[:200]}...")
-                    
-                    # Parse the vision response
-                    if "TEXT:" in vision_response:
-                        text_part = vision_response.split("TEXT:")[1].split("DESCRIPTION:")[0].strip()
-                        extracted_text = text_part if "No text found" not in text_part else ""
-                    
-                    if "DESCRIPTION:" in vision_response:
-                        desc_part = vision_response.split("DESCRIPTION:")[1].split("ISSUE:")[0].strip()
-                        image_description = desc_part
-                    
-                    if "ISSUE:" in vision_response:
-                        issue_part = vision_response.split("ISSUE:")[1].strip()
-                        if issue_part and issue_part != "":
-                            message = issue_part
-                        elif image_description:
-                            message = image_description
-                    
-                    # Combine extracted text with image description
-                    if extracted_text and image_description:
-                        message = f"{extracted_text}\n\n[Image shows: {image_description}]"
-                    elif extracted_text:
-                        message = extracted_text
-                    elif image_description:
-                        message = f"[Photo received] {image_description}"
-                    
-                    print(f"✅ Extracted from image: {message[:100]}...")
-                    
-                finally:
-                    # Clean up temp file
-                    if os.path.exists(temp_path):
-                        os.remove(temp_path)
-                
-            except Exception as e:
-                print(f"❌ Image processing error: {e}")
-                import traceback
-                traceback.print_exc()
-                return "📸 I received your image but encountered an error processing it. Please try:\n• Sending the image again\n• Or describe the issue in text"
         
-        # If still no message after image processing
+        # If still no message after media processing
         if not message or message.strip() == "":
-            return "I didn't receive any text or couldn't extract information from your image. Please try:\n• Typing your grievance\n• Sending a clearer photo\n• Describing the issue in text"
+            return "I didn't receive any text or couldn't extract information from your media. Please try:\n• Typing your grievance\n• Sending a clearer photo\n• Describing the issue in text"
         
         print("🤖 Analyzing message with Gemini AI...")
         chat = LlmChat(
             api_key=EMERGENT_LLM_KEY,
             session_id=f"whatsapp-{phone}",
             system_message="You are an AI assistant helping analyze constituent grievances for Indian legislators. Provide priority scores (1-10) and categorization."
-        ).with_model("gemini", "gemini-3-flash-preview")
+        ).with_model("gemini", "gemini-2.0-flash")
         
         analysis_prompt = f"""Analyze this constituent grievance and provide a JSON response:
 
