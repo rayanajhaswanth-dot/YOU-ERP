@@ -121,8 +121,105 @@ async def process_whatsapp_message(
         # Process image if present
         extracted_text = ""
         image_description = ""
+        voice_transcription = ""
         
-        if media_url and media_content_type and media_content_type.startswith('image/'):
+        # Check if it's an audio/voice message
+        if media_url and media_content_type and media_content_type.startswith('audio/'):
+            print(f"🎤 Processing voice message with Gemini 2.0 Flash...")
+            try:
+                import httpx
+                
+                # Download audio from Twilio
+                async with httpx.AsyncClient() as client:
+                    auth = (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+                    response = await client.get(media_url, auth=auth, timeout=60.0)
+                    audio_data = response.content
+                
+                # Save to temp file for Gemini processing
+                file_ext = '.ogg' if 'ogg' in media_content_type else '.mp3'
+                temp_path = os.path.join(tempfile.gettempdir(), f"voice_{uuid.uuid4()}{file_ext}")
+                
+                with open(temp_path, 'wb') as f:
+                    f.write(audio_data)
+                
+                try:
+                    # Use Gemini 2.0 Flash for voice transcription
+                    chat = LlmChat(
+                        api_key=EMERGENT_LLM_KEY,
+                        session_id=f"voice-{phone}-{uuid.uuid4()}",
+                        system_message="You are an expert audio transcription assistant specializing in Indian languages. You can accurately transcribe audio in Hindi, Tamil, Telugu, Kannada, Malayalam, Bengali, Marathi, Gujarati, Punjabi, and other Indian regional languages."
+                    ).with_model("gemini", "gemini-2.0-flash")
+                    
+                    # Create file content for audio
+                    audio_file = FileContentWithMimeType(
+                        file_path=temp_path,
+                        mime_type=media_content_type
+                    )
+                    
+                    transcription_prompt = """Listen to this voice message from a constituent. Transcribe it exactly as spoken.
+
+If the audio is in a local Indian language (Hindi, Tamil, Telugu, Kannada, Malayalam, Bengali, Marathi, Gujarati, Punjabi, or any other regional language):
+1. Provide the original transcription
+2. Provide an accurate English translation
+
+Respond ONLY with a valid JSON object (no markdown, no code blocks):
+{
+    "original": "the exact transcription of what was spoken",
+    "english_translation": "the English translation (same as original if already in English)",
+    "language_detected": "the detected language"
+}"""
+                    
+                    user_msg = UserMessage(
+                        text=transcription_prompt,
+                        file_contents=[audio_file]
+                    )
+                    
+                    transcription_response = await chat.send_message(user_msg)
+                    print(f"🎤 Voice transcription response: {transcription_response}")
+                    
+                    # Parse the transcription response
+                    try:
+                        clean_response = transcription_response.strip()
+                        if clean_response.startswith('```'):
+                            clean_response = clean_response.split('\n', 1)[1]
+                            if clean_response.endswith('```'):
+                                clean_response = clean_response[:-3]
+                            clean_response = clean_response.strip()
+                        
+                        transcription_data = json.loads(clean_response)
+                        original_text = transcription_data.get("original", "")
+                        english_text = transcription_data.get("english_translation", original_text)
+                        detected_lang = transcription_data.get("language_detected", "Unknown")
+                        
+                        # Use English translation as the message for grievance processing
+                        if detected_lang.lower() != "english" and english_text:
+                            voice_transcription = f"[Voice message in {detected_lang}]\nOriginal: {original_text}\n\nEnglish: {english_text}"
+                            message = english_text
+                        else:
+                            voice_transcription = f"[Voice message] {original_text}"
+                            message = original_text
+                        
+                        print(f"✅ Voice transcribed: {message[:100]}...")
+                        
+                    except json.JSONDecodeError:
+                        # If JSON parsing fails, use raw response
+                        voice_transcription = f"[Voice message] {transcription_response}"
+                        message = transcription_response
+                        print(f"⚠️ Could not parse JSON, using raw response")
+                    
+                finally:
+                    # Clean up temp file
+                    if os.path.exists(temp_path):
+                        os.remove(temp_path)
+                        
+            except Exception as e:
+                print(f"❌ Voice processing error: {e}")
+                import traceback
+                traceback.print_exc()
+                return "🎤 I received your voice message but encountered an error processing it. Please try:\n• Recording again with clear audio\n• Speaking closer to the microphone\n• Or typing your grievance instead"
+        
+        # Process image if present (existing logic)
+        elif media_url and media_content_type and media_content_type.startswith('image/'):
             print("📸 Processing image with Gemini Vision...")
             try:
                 import httpx
