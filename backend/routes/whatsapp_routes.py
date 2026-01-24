@@ -125,30 +125,33 @@ async def process_whatsapp_message(
         
         # Check if it's an audio/voice message
         if media_url and media_content_type and media_content_type.startswith('audio/'):
-            print(f"🎤 Processing voice message with Gemini 2.0 Flash...")
+            print(f"🎤 Processing voice message... Content-Type: {media_content_type}")
             try:
                 import httpx
                 
                 # Download audio from Twilio
+                print(f"📥 Downloading audio from: {media_url[:50]}...")
                 async with httpx.AsyncClient() as client:
                     auth = (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
                     response = await client.get(media_url, auth=auth, timeout=60.0)
                     audio_data = response.content
+                    print(f"📥 Downloaded {len(audio_data)} bytes of audio")
                 
                 # Save to temp file for Gemini processing
-                file_ext = '.ogg' if 'ogg' in media_content_type else '.mp3'
+                file_ext = '.ogg' if 'ogg' in media_content_type else '.mp3' if 'mp3' in media_content_type or 'mpeg' in media_content_type else '.wav'
                 temp_path = os.path.join(tempfile.gettempdir(), f"voice_{uuid.uuid4()}{file_ext}")
                 
                 with open(temp_path, 'wb') as f:
                     f.write(audio_data)
+                print(f"📁 Saved audio to: {temp_path}")
                 
                 try:
-                    # Use Gemini 2.0 Flash for voice transcription
+                    # Use Gemini 2.5 Flash for voice transcription (supports audio files)
                     chat = LlmChat(
                         api_key=EMERGENT_LLM_KEY,
                         session_id=f"voice-{phone}-{uuid.uuid4()}",
                         system_message="You are an expert audio transcription assistant specializing in Indian languages. You can accurately transcribe audio in Hindi, Tamil, Telugu, Kannada, Malayalam, Bengali, Marathi, Gujarati, Punjabi, and other Indian regional languages."
-                    ).with_model("gemini", "gemini-2.0-flash")
+                    ).with_model("gemini", "gemini-2.5-flash")
                     
                     # Create file content for audio
                     audio_file = FileContentWithMimeType(
@@ -174,8 +177,9 @@ Respond ONLY with a valid JSON object (no markdown, no code blocks):
                         file_contents=[audio_file]
                     )
                     
+                    print(f"📤 Sending audio to Gemini 2.5 Flash for transcription...")
                     transcription_response = await chat.send_message(user_msg)
-                    print(f"🎤 Voice transcription response: {transcription_response}")
+                    print(f"🎤 Voice transcription response: {transcription_response[:200]}...")
                     
                     # Parse the transcription response
                     try:
