@@ -9,7 +9,7 @@ import uuid
 import tempfile
 import json
 from datetime import datetime, timezone
-from emergentintegrations.llm.chat import LlmChat, UserMessage, FileContentWithMimeType
+from emergentintegrations.llm.chat import LlmChat, UserMessage, FileContentWithMimeType, ImageContent
 
 router = APIRouter()
 
