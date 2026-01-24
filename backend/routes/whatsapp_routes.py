@@ -236,6 +236,7 @@ async def process_whatsapp_message(
             print(f"📸 Processing image with GPT-4o Vision... Content-Type: {media_content_type}")
             try:
                 import httpx
+                from emergentintegrations.llm.chat import FileContentWithMimeType
                 
                 # Download image from Twilio
                 print(f"📥 Downloading image from Twilio...")
@@ -245,36 +246,44 @@ async def process_whatsapp_message(
                     image_data = response.content
                     print(f"📥 Downloaded {len(image_data)} bytes")
                 
-                # Convert to base64 with proper data URL format for GPT-4o
-                image_base64_raw = base64.b64encode(image_data).decode('utf-8')
-                
-                # Determine MIME type for data URL
+                # Determine file extension and MIME type
                 if 'jpeg' in media_content_type or 'jpg' in media_content_type:
+                    file_ext = '.jpg'
                     mime_type = 'image/jpeg'
                 elif 'png' in media_content_type:
+                    file_ext = '.png'
                     mime_type = 'image/png'
-                elif 'gif' in media_content_type:
-                    mime_type = 'image/gif'
                 elif 'webp' in media_content_type:
+                    file_ext = '.webp'
                     mime_type = 'image/webp'
+                elif 'gif' in media_content_type:
+                    file_ext = '.gif'
+                    mime_type = 'image/gif'
                 else:
-                    mime_type = 'image/jpeg'  # Default to jpeg
+                    file_ext = '.jpg'  # Default to jpg
+                    mime_type = 'image/jpeg'
                 
-                # Create proper base64 data URL
-                image_base64 = f"data:{mime_type};base64,{image_base64_raw}"
-                print(f"📸 Created data URL with mime type: {mime_type}")
+                # Save to temp file
+                temp_path = os.path.join(tempfile.gettempdir(), f"image_{uuid.uuid4()}{file_ext}")
+                with open(temp_path, 'wb') as f:
+                    f.write(image_data)
+                print(f"📁 Saved image to: {temp_path} (mime: {mime_type})")
                 
-                # Create ImageContent object with full data URL
-                image_content = ImageContent(image_base64=image_base64)
-                
-                # Use GPT-4o for vision
-                chat = LlmChat(
-                    api_key=EMERGENT_LLM_KEY,
-                    session_id=f"vision-{phone}-{uuid.uuid4()}",
-                    system_message="You are an AI assistant analyzing images for Indian legislators. Extract any text (OCR) and describe what you see. Focus on identifying problems, complaints, or issues shown in the image."
-                ).with_model("openai", "gpt-4o")
-                
-                vision_prompt = """Analyze this image sent by a constituent. Provide:
+                try:
+                    # Create FileContentWithMimeType for the image
+                    image_content = FileContentWithMimeType(
+                        file_path=temp_path,
+                        mime_type=mime_type
+                    )
+                    
+                    # Use GPT-4o for vision
+                    chat = LlmChat(
+                        api_key=EMERGENT_LLM_KEY,
+                        session_id=f"vision-{phone}-{uuid.uuid4()}",
+                        system_message="You are an AI assistant analyzing images for Indian legislators. Extract any text (OCR) and describe what you see. Focus on identifying problems, complaints, or issues shown in the image."
+                    ).with_model("openai", "gpt-4o")
+                    
+                    vision_prompt = """Analyze this image sent by a constituent. Provide:
 
 1. **Extracted Text** (OCR): If there's any handwritten or printed text, extract it completely
 2. **Image Description**: Describe what you see (damaged roads, water issues, infrastructure problems, etc.)
@@ -287,15 +296,15 @@ Respond in this format:
 TEXT: [extracted text here, or "No text found"]
 DESCRIPTION: [what you see in the image]
 ISSUE: [the problem being reported]"""
-                
-                user_message = UserMessage(
-                    text=vision_prompt,
-                    file_contents=[image_content]
-                )
-                
-                print(f"📤 Sending to GPT-4o for analysis...")
-                vision_response = await chat.send_message(user_message)
-                print(f"👁️ Vision response: {vision_response[:200]}...")
+                    
+                    user_message = UserMessage(
+                        text=vision_prompt,
+                        file_contents=[image_content]
+                    )
+                    
+                    print(f"📤 Sending to GPT-4o for analysis...")
+                    vision_response = await chat.send_message(user_message)
+                    print(f"👁️ Vision response: {vision_response[:200]}...")
                 
                 # Parse the vision response
                 if "TEXT:" in vision_response:
