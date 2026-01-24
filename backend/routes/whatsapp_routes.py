@@ -26,7 +26,7 @@ class WhatsAppMessage(BaseModel):
 async def whatsapp_webhook(request: Request):
     """
     Twilio WhatsApp webhook endpoint
-    Receives incoming messages from WhatsApp users
+    Receives incoming messages from WhatsApp users (text and images)
     """
     try:
         form_data = await request.form()
@@ -37,8 +37,19 @@ async def whatsapp_webhook(request: Request):
         message_sid = form_data.get('MessageSid', '')
         profile_name = form_data.get('ProfileName', 'Constituent')
         
+        # Check for media (images)
+        num_media = int(form_data.get('NumMedia', 0))
+        media_url = None
+        media_content_type = None
+        
+        if num_media > 0:
+            media_url = form_data.get('MediaUrl0', '')
+            media_content_type = form_data.get('MediaContentType0', '')
+            print(f"📸 Received media: {media_content_type} from {from_number}")
+        
         print(f"📱 Received WhatsApp message from {from_number}: {message_body}")
         print(f"   To: {to_number}, SID: {message_sid}, Profile: {profile_name}")
+        print(f"   Media: {num_media} files, URL: {media_url}")
         
         phone_clean = from_number.replace('whatsapp:', '').strip()
         
@@ -46,7 +57,9 @@ async def whatsapp_webhook(request: Request):
             phone_clean,
             message_body,
             profile_name,
-            message_sid
+            message_sid,
+            media_url,
+            media_content_type
         )
         
         print(f"📤 Sending response: {response_message[:100]}...")
