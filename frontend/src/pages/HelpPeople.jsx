@@ -108,6 +108,22 @@ export default function HelpPeople({ user }) {
     return Math.floor((now - created) / (1000 * 60 * 60 * 24));
   };
 
+  const handleVoiceTranscription = (transcriptionResult) => {
+    // Use the English translation or original text for the grievance description
+    const description = transcriptionResult.language_detected !== 'English' 
+      ? `[${transcriptionResult.language_detected}] ${transcriptionResult.original}\n\n[English] ${transcriptionResult.english_translation}`
+      : transcriptionResult.original;
+    
+    setFormData(prev => ({
+      ...prev,
+      description: description
+    }));
+    
+    setShowVoiceRecorder(false);
+    setShowForm(true);
+    toast.success('Voice transcribed! Review and submit your grievance.');
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setAnalyzing(true);
