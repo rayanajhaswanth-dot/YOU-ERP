@@ -43,12 +43,16 @@ Build "YOU - Governance ERP & Workflow Automation for Legislators," a production
 ### 4. WhatsApp Bot ✅
 - Twilio integration for receiving grievances
 - Text message processing with AI analysis
-- **Voice message transcription** using **Sarvam AI** (`saaras:v1` model) [UPDATED - Jan 24, 2026]
-  - Specialized for Indian regional dialects
-  - Supports Hindi, Tamil, Telugu, Kannada, Malayalam, Bengali, Marathi, Gujarati, Punjabi
-  - Handles code-switching (Hinglish/Telugish)
-  - Fallback to Gemini if Sarvam fails
-- **Image/document OCR** using Gemini 2.5 Flash
+- **Multimodal Orchestrator V6** [UPDATED - Jan 24, 2026]
+  - **Voice transcription** using **Sarvam AI** (`saaras:v1` model)
+    - Specialized for Indian regional dialects
+    - Supports Hindi, Tamil, Telugu, Kannada, Malayalam, Bengali, Marathi, Gujarati, Punjabi
+    - Handles code-switching (Hinglish/Telugish)
+    - Multipart form-data upload
+  - **Image OCR** using **Gemini 2.0 Flash** direct API
+    - Inline base64 image encoding
+    - Structured JSON response
+  - Extended timeouts (120s for download, 90s for AI processing)
 - Auto-priority assignment
 
 ### 5. Photo Verification ✅
