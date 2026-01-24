@@ -230,14 +230,24 @@ export default function HelpPeople({ user }) {
           </h1>
           <p className="text-slate-400 text-lg">Grievance tracking & AI triage</p>
         </div>
-        <Button
-          onClick={() => setShowForm(!showForm)}
-          data-testid="add-grievance-button"
-          className="bg-orange-500 hover:bg-orange-600 text-white font-semibold rounded-full px-8 py-3 pill-button"
-        >
-          <MessageSquare className="h-4 w-4 mr-2" />
-          Add Grievance
-        </Button>
+        <div className="flex gap-3">
+          <Button
+            onClick={() => setShowVoiceRecorder(true)}
+            data-testid="voice-grievance-button"
+            className="bg-purple-500 hover:bg-purple-600 text-white font-semibold rounded-full px-6 py-3 pill-button"
+          >
+            <Mic className="h-4 w-4 mr-2" />
+            Voice Grievance
+          </Button>
+          <Button
+            onClick={() => setShowForm(!showForm)}
+            data-testid="add-grievance-button"
+            className="bg-orange-500 hover:bg-orange-600 text-white font-semibold rounded-full px-8 py-3 pill-button"
+          >
+            <MessageSquare className="h-4 w-4 mr-2" />
+            Add Grievance
+          </Button>
+        </div>
       </div>
 
       {/* Metrics Cards */}
