@@ -138,12 +138,11 @@ Respond ONLY with valid JSON, no markdown."""
         grievance_data = {
             'id': grievance_id,
             'politician_id': politician_id,
-            'constituent_name': name,
-            'phone': phone,
-            'message': message,
-            'source': 'whatsapp',
-            'priority': priority,
-            'status': 'pending',
+            'issue_type': category,
+            'village': f'From {name} ({phone})',
+            'description': message,
+            'ai_priority': priority,
+            'status': 'PENDING',
             'created_at': datetime.now(timezone.utc).isoformat()
         }
         
