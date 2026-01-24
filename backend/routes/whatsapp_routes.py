@@ -121,23 +121,28 @@ async def process_whatsapp_message(
             
             return status_text
         
-        # Process image if present
+        # ============================================================
+        # MULTIMODAL ORCHESTRATOR (V6) - Discrete Input Handling
+        # Handles individual Image OCR or Voice Transcription
+        # ============================================================
+        
         extracted_text = ""
         image_description = ""
         voice_transcription = ""
+        voice_transcript = None
+        image_buffer = None
         
-        # Determine media type - check both content-type and URL extension
+        # Determine media type
         is_image = False
         is_audio = False
         
         if media_url and media_content_type:
-            # Check content type first
             if media_content_type.startswith('image/'):
                 is_image = True
             elif media_content_type.startswith('audio/'):
                 is_audio = True
             
-            # Also check URL extension as fallback (Twilio sometimes sends wrong content-type)
+            # URL extension fallback
             media_url_lower = media_url.lower()
             if any(ext in media_url_lower for ext in ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.heic']):
                 is_image = True
@@ -148,126 +153,205 @@ async def process_whatsapp_message(
         
         print(f"📊 Media detection: is_image={is_image}, is_audio={is_audio}, content_type={media_content_type}")
         
-        # Check if it's an audio/voice message - Use Sarvam AI for Indian dialect transcription
-        if media_url and is_audio:
-            print(f"🎤 Processing voice message with Sarvam AI... Content-Type: {media_content_type}")
+        # STEP 1: Download media from Twilio (with extended timeout)
+        if media_url and (is_audio or is_image):
+            print(f"📥 Step 1: Downloading media from Twilio...")
             try:
-                # STEP 1: Securely download audio from Twilio with Basic Auth
-                print(f"📥 Downloading audio from Twilio...")
-                async with httpx.AsyncClient(timeout=60.0) as client:
+                async with httpx.AsyncClient(timeout=120.0) as client:
                     auth = (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
-                    audio_response = await client.get(media_url, auth=auth)
+                    media_response = await client.get(media_url, auth=auth, follow_redirects=True)
                     
-                    if audio_response.status_code != 200:
-                        raise Exception(f"Twilio download failed: {audio_response.status_code}")
+                    if media_response.status_code != 200:
+                        raise Exception(f"Twilio HTTP {media_response.status_code}: {media_response.reason_phrase}")
                     
-                    audio_data = audio_response.content
-                    print(f"📥 Downloaded {len(audio_data)} bytes of audio")
+                    media_buffer = media_response.content
                     
-                    # STEP 2: Upload to Sarvam AI using multipart/form-data
-                    # Sarvam expects file upload, not JSON with base64
-                    print(f"📤 Uploading to Sarvam AI (saaras:v1 model)...")
+                    if len(media_buffer) == 0:
+                        raise Exception("Downloaded buffer is empty")
                     
-                    # Determine file extension
-                    if 'ogg' in media_content_type or 'opus' in media_content_type:
-                        filename = 'voice.ogg'
-                        file_mime = 'audio/ogg'
-                    elif 'mp3' in media_content_type or 'mpeg' in media_content_type:
-                        filename = 'voice.mp3'
-                        file_mime = 'audio/mpeg'
-                    else:
-                        filename = 'voice.ogg'
-                        file_mime = 'audio/ogg'
+                    print(f"📥 Downloaded {len(media_buffer)} bytes successfully")
                     
-                    # Create multipart form data
-                    files = {
-                        'file': (filename, audio_data, file_mime)
-                    }
-                    data = {
-                        'model': 'saaras:v1'
-                    }
-                    
-                    sarvam_response = await client.post(
-                        "https://api.sarvam.ai/speech-to-text-translate",
-                        headers={
-                            "api-subscription-key": SARVAM_API_KEY
-                        },
-                        files=files,
-                        data=data
-                    )
-                    
-                    print(f"🎤 Sarvam response status: {sarvam_response.status_code}")
-                    print(f"🎤 Sarvam response: {sarvam_response.text[:500]}")
-                    
-                    if sarvam_response.status_code == 200:
-                        sarvam_data = sarvam_response.json()
-                        
-                        # Extract transcript
-                        transcript = sarvam_data.get("transcript", "")
-                        language_code = sarvam_data.get("language_code", "unknown")
-                        
-                        if not transcript:
-                            transcript = sarvam_data.get("text", "")
-                        
-                        # Map language codes to names
-                        lang_map = {
-                            "hi-IN": "Hindi", "ta-IN": "Tamil", "te-IN": "Telugu",
-                            "kn-IN": "Kannada", "ml-IN": "Malayalam", "bn-IN": "Bengali",
-                            "mr-IN": "Marathi", "gu-IN": "Gujarati", "pa-IN": "Punjabi",
-                            "en-IN": "English", "unknown": "Auto-detected"
-                        }
-                        detected_lang = lang_map.get(language_code, language_code)
-                        
-                        voice_transcription = f"[Voice in {detected_lang}] {transcript}"
-                        message = transcript
-                        print(f"✅ Sarvam transcribed ({detected_lang}): {message[:100]}...")
-                        
-                    else:
-                        error_text = sarvam_response.text
-                        print(f"❌ Sarvam API error ({sarvam_response.status_code}): {error_text}")
-                        
-                        # Fallback to Gemini if Sarvam fails
-                        print(f"🔄 Falling back to Gemini for transcription...")
-                        
-                        # Save audio to temp file for Gemini
-                        temp_path = os.path.join(tempfile.gettempdir(), f"voice_{uuid.uuid4()}.ogg")
-                        with open(temp_path, 'wb') as f:
-                            f.write(audio_data)
-                        
+                    if is_audio:
+                        # STEP 2: Process Voice via Sarvam AI
+                        print(f"🎤 Step 2: Processing Voice via Sarvam AI (saaras:v1)...")
                         try:
-                            audio_file = FileContentWithMimeType(
-                                file_path=temp_path,
-                                mime_type=file_mime
+                            # Determine file type
+                            if 'ogg' in media_content_type or 'opus' in media_content_type:
+                                filename = 'input.ogg'
+                                file_mime = 'audio/ogg'
+                            elif 'mp3' in media_content_type or 'mpeg' in media_content_type:
+                                filename = 'input.mp3'
+                                file_mime = 'audio/mpeg'
+                            else:
+                                filename = 'input.ogg'
+                                file_mime = 'audio/ogg'
+                            
+                            # Upload to Sarvam using multipart form-data
+                            files = {'file': (filename, media_buffer, file_mime)}
+                            data = {'model': 'saaras:v1'}
+                            
+                            sarvam_response = await client.post(
+                                "https://api.sarvam.ai/speech-to-text-translate",
+                                headers={"api-subscription-key": SARVAM_API_KEY},
+                                files=files,
+                                data=data,
+                                timeout=90.0  # Extended timeout for transcription
                             )
                             
-                            chat = LlmChat(
-                                api_key=EMERGENT_LLM_KEY,
-                                session_id=f"voice-{phone}-{uuid.uuid4()}",
-                                system_message="You are a transcription assistant for Indian languages."
-                            ).with_model("gemini", "gemini-2.5-flash")
+                            print(f"🎤 Sarvam response: {sarvam_response.status_code}")
                             
-                            user_msg = UserMessage(
-                                text="Transcribe this audio exactly. If not in English, provide English translation too. Just respond with the transcription.",
-                                file_contents=[audio_file]
-                            )
-                            
-                            transcription_response = await chat.send_message(user_msg)
-                            voice_transcription = f"[Voice message] {transcription_response}"
-                            message = transcription_response
-                            print(f"✅ Gemini fallback transcribed: {message[:100]}...")
-                        finally:
-                            if os.path.exists(temp_path):
-                                os.remove(temp_path)
+                            if sarvam_response.status_code == 200:
+                                sarvam_data = sarvam_response.json()
+                                voice_transcript = sarvam_data.get("transcript") or sarvam_data.get("text", "")
+                                language_code = sarvam_data.get("language_code", "unknown")
+                                
+                                lang_map = {
+                                    "hi-IN": "Hindi", "ta-IN": "Tamil", "te-IN": "Telugu",
+                                    "kn-IN": "Kannada", "ml-IN": "Malayalam", "bn-IN": "Bengali",
+                                    "mr-IN": "Marathi", "gu-IN": "Gujarati", "pa-IN": "Punjabi",
+                                    "en-IN": "English"
+                                }
+                                detected_lang = lang_map.get(language_code, language_code)
+                                
+                                voice_transcription = f"[Voice in {detected_lang}] {voice_transcript}"
+                                print(f"✅ Sarvam transcribed ({detected_lang}): {voice_transcript[:100]}...")
+                            else:
+                                print(f"⚠️ Sarvam failed ({sarvam_response.status_code}): {sarvam_response.text[:200]}")
+                                # Fallback will use Gemini below
+                                
+                        except Exception as sarvam_err:
+                            print(f"⚠️ Sarvam processing error: {sarvam_err}")
                         
+                        # STEP 3: Use Gemini for grievance extraction from voice
+                        print(f"🤖 Step 3: Registering Voice Grievance via Gemini...")
+                        
+                        prompt_text = f"""TASK: You are a Legislative Assistant for the 'YOU' Governance Platform.
+INPUT: A voice transcript: "{voice_transcript or 'Unable to transcribe'}"
+
+REQUIREMENT: Extract the constituent details and core grievance issue.
+Return ONLY a valid JSON object.
+
+SCHEMA:
+{{
+  "constituent_name": "name if mentioned, else 'Anonymous Citizen'",
+  "ward_number": "ward/village if mentioned, else 'Not specified'",
+  "issue_summary": "brief summary of the grievance",
+  "ai_priority": 1-10 based on urgency,
+  "category": "Infrastructure/Water/Electricity/Roads/Sanitation/Other",
+  "resolution_suggestion": "one sentence action for the OSD"
+}}"""
+                        
+                        gemini_payload = {
+                            "contents": [{"parts": [{"text": prompt_text}]}],
+                            "generationConfig": {"responseMimeType": "application/json"}
+                        }
+                        
+                        gemini_response = await client.post(
+                            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={EMERGENT_LLM_KEY}",
+                            json=gemini_payload,
+                            timeout=60.0
+                        )
+                        
+                        if gemini_response.status_code == 200:
+                            gemini_data = gemini_response.json()
+                            if gemini_data.get("candidates"):
+                                result_text = gemini_data["candidates"][0]["content"]["parts"][0]["text"]
+                                try:
+                                    grievance_json = json.loads(result_text.replace('```json', '').replace('```', '').strip())
+                                    message = grievance_json.get("issue_summary", voice_transcript or message)
+                                    extracted_text = json.dumps(grievance_json)
+                                    print(f"✅ Gemini extracted grievance: {message[:100]}...")
+                                except:
+                                    message = voice_transcript or message
+                        else:
+                            message = voice_transcript or message
+                            
+                    elif is_image:
+                        # STEP 2: Process Image via Gemini Vision
+                        print(f"📸 Step 2: Processing Image via Gemini Vision...")
+                        image_buffer = media_buffer
+                        
+                        # Determine MIME type
+                        if 'jpeg' in media_content_type or 'jpg' in media_content_type:
+                            mime_type = 'image/jpeg'
+                        elif 'png' in media_content_type:
+                            mime_type = 'image/png'
+                        else:
+                            mime_type = 'image/jpeg'
+                        
+                        # Encode image as base64
+                        image_base64 = base64.b64encode(image_buffer).decode('utf-8')
+                        
+                        prompt_text = """TASK: You are a Legislative Assistant for the 'YOU' Governance Platform.
+INPUT: An image of a physical letter or grievance document.
+
+REQUIREMENT: 
+1. Extract ALL text from the image using OCR
+2. Identify the constituent name, ward/village, and core issue
+3. Return ONLY a valid JSON object
+
+SCHEMA:
+{
+  "constituent_name": "name if found, else 'Anonymous Citizen'",
+  "ward_number": "ward/village if found, else 'Not specified'",
+  "extracted_text": "full OCR text from the image",
+  "issue_summary": "brief summary of the grievance",
+  "ai_priority": 1-10 based on urgency,
+  "category": "Infrastructure/Water/Electricity/Roads/Sanitation/Other",
+  "resolution_suggestion": "one sentence action for the OSD"
+}"""
+                        
+                        gemini_payload = {
+                            "contents": [{
+                                "parts": [
+                                    {"inlineData": {"mimeType": mime_type, "data": image_base64}},
+                                    {"text": prompt_text}
+                                ]
+                            }],
+                            "generationConfig": {"responseMimeType": "application/json"}
+                        }
+                        
+                        print(f"📤 Sending image ({len(image_base64)} chars base64) to Gemini...")
+                        
+                        gemini_response = await client.post(
+                            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={EMERGENT_LLM_KEY}",
+                            json=gemini_payload,
+                            timeout=90.0  # Extended timeout for image processing
+                        )
+                        
+                        print(f"📸 Gemini response: {gemini_response.status_code}")
+                        
+                        if gemini_response.status_code == 200:
+                            gemini_data = gemini_response.json()
+                            
+                            if gemini_data.get("error"):
+                                raise Exception(f"Gemini Error: {gemini_data['error'].get('message', 'Unknown')}")
+                            
+                            if gemini_data.get("candidates"):
+                                result_text = gemini_data["candidates"][0]["content"]["parts"][0]["text"]
+                                try:
+                                    grievance_json = json.loads(result_text.replace('```json', '').replace('```', '').strip())
+                                    extracted_text = grievance_json.get("extracted_text", "")
+                                    image_description = grievance_json.get("issue_summary", "")
+                                    message = image_description or extracted_text[:200] or message
+                                    print(f"✅ Gemini OCR result: {message[:100]}...")
+                                except json.JSONDecodeError as je:
+                                    print(f"⚠️ JSON parse error: {je}")
+                                    message = result_text[:200] if result_text else message
+                        else:
+                            error_text = gemini_response.text[:500]
+                            print(f"❌ Gemini API error: {error_text}")
+                            return "📸 I received your image but encountered an error processing it. Please try:\n• Sending a clearer image\n• Or describing the issue in text"
+                            
             except Exception as e:
-                print(f"❌ Voice processing error: {e}")
+                print(f"❌ Media processing error: {e}")
                 import traceback
                 traceback.print_exc()
-                return "🎤 I received your voice message but encountered an error processing it. Please try:\n• Recording again with clear audio\n• Speaking closer to the microphone\n• Or typing your grievance instead"
-        
-        # Process image if present - Use Gemini Vision
-        elif media_url and is_image:
-            print(f"📸 Processing image with Gemini Vision... Content-Type: {media_content_type}")
+                
+                if is_audio:
+                    return "🎤 I received your voice message but encountered an error processing it. Please try:\n• Recording again with clear audio\n• Speaking closer to the microphone\n• Or typing your grievance instead"
+                else:
+                    return "📸 I received your image but encountered an error processing it. Please try:\n• Sending a clearer image\n• Or describing the issue in text"
             try:
                 # Download image from Twilio
                 print(f"📥 Downloading image from Twilio...")
