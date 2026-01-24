@@ -277,16 +277,6 @@ Your concern has been registered and will be reviewed by our team within 24-48 h
 You'll receive updates as we work on resolving this.
 
 Thank you for reaching out!""".format(summary, category, priority_label, priority, grievance_id[:8].upper(), media_note, ocr_note)
-
-🎯 Category: {category}
-⚡ Priority: {priority_label} ({priority}/10)
-🔢 Reference ID: {grievance_id[:8].upper()}
-
-Your concern has been registered and will be reviewed by our team within 24-48 hours.
-
-You'll receive updates as we work on resolving this.
-
-Thank you for reaching out! 🙏"""
         
         return response
         
