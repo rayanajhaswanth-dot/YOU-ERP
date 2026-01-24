@@ -171,10 +171,10 @@ class TestBackendAPIEndpoints:
     def test_grievances_endpoint(self):
         """Test grievances endpoint exists"""
         response = requests.get(f"{BASE_URL}/api/grievances/")
-        # Should return 401 unauthorized without token, not 404
-        assert response.status_code in [200, 401, 422]
+        # Should return 401/403 unauthorized without token, not 404
+        assert response.status_code in [200, 401, 403, 422]
     
     def test_analytics_dashboard_endpoint(self):
         """Test analytics dashboard endpoint exists"""
         response = requests.get(f"{BASE_URL}/api/analytics/dashboard")
-        assert response.status_code in [200, 401, 422]
+        assert response.status_code in [200, 401, 403, 422]
