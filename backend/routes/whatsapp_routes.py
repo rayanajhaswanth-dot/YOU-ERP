@@ -95,24 +95,110 @@ async def process_whatsapp_message(
     try:
         supabase = get_supabase()
         
-        if message.lower() in ['hi', 'hello', 'hey', 'namaste']:
-            return f"Namaste {name}! 🙏\n\nWelcome to YOU Governance ERP.\n\nI'm here to help you register grievances and get assistance.\n\nPlease describe your issue and I'll make sure it reaches the right people.\n\nCommands:\n• Type your grievance to register it\n• 'status' - Check your grievance status\n• 'help' - Get help"
+        if not media_url and message.lower() in ['hi', 'hello', 'hey', 'namaste']:
+            return f"Namaste {name}! 🙏\n\nWelcome to YOU Governance ERP.\n\nI'm here to help you register grievances and get assistance.\n\nYou can:\n• Type your grievance\n• Send a photo of the issue\n• Send a photo of a handwritten letter\n\nI'll analyze it with AI and register it immediately.\n\nCommands:\n• 'status' - Check your grievances\n• 'help' - Get help"
         
         if message.lower() == 'help':
-            return "📋 How to use:\n\n1. Simply type your problem/grievance\n2. I'll analyze it and assign priority\n3. Our team will respond within 24-48 hours\n\nYou can check status anytime by typing 'status'"
+            return "📋 How to use:\n\n1. Type your problem/grievance\n2. OR send a photo (handwritten letter, damaged infrastructure, etc.)\n3. I'll analyze it with AI and assign priority\n4. Our team will respond within 24-48 hours\n\nYou can check status anytime by typing 'status'"
         
         if message.lower() == 'status':
-            grievances = supabase.table('grievances').select('*').eq('phone', phone).order('created_at', desc=True).limit(3).execute()
+            grievances = supabase.table('grievances').select('*').order('created_at', desc=True).limit(3).execute()
             
             if not grievances.data:
-                return "You don't have any registered grievances yet.\n\nFeel free to share your concerns and I'll help register them."
+                return "No recent grievances found.\n\nFeel free to share your concerns (text or photo) and I'll help register them."
             
-            status_text = f"📊 Your Recent Grievances:\n\n"
+            status_text = f"📊 Recent Grievances:\n\n"
             for idx, g in enumerate(grievances.data, 1):
-                status_emoji = {'pending': '⏳', 'in_progress': '🔄', 'resolved': '✅'}.get(g['status'], '📝')
-                status_text += f"{idx}. {status_emoji} {g['status'].upper()}\n   Priority: {g['priority']}/10\n   {g['message'][:50]}...\n\n"
+                status_emoji = {'PENDING': '⏳', 'IN_PROGRESS': '🔄', 'RESOLVED': '✅'}.get(g.get('status', '').upper(), '📝')
+                priority = g.get('ai_priority', 5)
+                desc = g.get('description', 'No description')[:50]
+                status_text += f"{idx}. {status_emoji} {g.get('status', 'PENDING')}\n   Priority: {priority}/10\n   {desc}...\n\n"
             
             return status_text
+        
+        # Process image if present
+        extracted_text = ""
+        image_description = ""
+        
+        if media_url and media_content_type and media_content_type.startswith('image/'):
+            print("📸 Processing image with Gemini Vision...")
+            try:
+                import httpx
+                import base64
+                
+                # Download image from Twilio
+                async with httpx.AsyncClient() as client:
+                    auth = (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+                    response = await client.get(media_url, auth=auth, timeout=30.0)
+                    image_data = response.content
+                
+                # Convert to base64 for Gemini
+                image_base64 = base64.b64encode(image_data).decode('utf-8')
+                
+                # Use Gemini Vision to analyze the image
+                chat = LlmChat(
+                    api_key=EMERGENT_LLM_KEY,
+                    session_id=f"vision-{phone}",
+                    system_message="You are an AI assistant analyzing images for Indian legislators. Extract any text (OCR) and describe what you see. Focus on identifying problems, complaints, or issues shown in the image."
+                ).with_model("gemini", "gemini-3-flash-preview")
+                
+                vision_prompt = f\"\"\"Analyze this image sent by a constituent. Provide:
+
+1. **Extracted Text** (OCR): If there's any handwritten or printed text, extract it completely
+2. **Image Description**: Describe what you see (damaged roads, water issues, infrastructure problems, etc.)
+3. **Issue Identified**: What problem or grievance is being reported?
+
+If it's a handwritten letter, extract the full text.
+If it's a photo of an issue (broken road, water leak, etc.), describe it clearly.
+
+Respond in this format:
+TEXT: [extracted text here, or "No text found"]
+DESCRIPTION: [what you see in the image]
+ISSUE: [the problem being reported]\"\"\"
+                
+                user_message = UserMessage(
+                    text=vision_prompt,
+                    image_base64=image_base64
+                )
+                
+                vision_response = await chat.send_message(user_message)
+                print(f"👁️ Vision response: {vision_response}")
+                
+                # Parse the vision response
+                if "TEXT:" in vision_response:
+                    text_part = vision_response.split("TEXT:")[1].split("DESCRIPTION:")[0].strip()
+                    extracted_text = text_part if "No text found" not in text_part else ""
+                
+                if "DESCRIPTION:" in vision_response:
+                    desc_part = vision_response.split("DESCRIPTION:")[1].split("ISSUE:")[0].strip()
+                    image_description = desc_part
+                
+                if "ISSUE:" in vision_response:
+                    issue_part = vision_response.split("ISSUE:")[1].strip()
+                    if issue_part and issue_part != "":
+                        message = issue_part
+                    elif image_description:
+                        message = image_description
+                
+                # Combine extracted text with image description
+                if extracted_text and image_description:
+                    message = f"{extracted_text}\n\n[Image shows: {image_description}]"
+                elif extracted_text:
+                    message = extracted_text
+                elif image_description:
+                    message = f"[Photo received] {image_description}"
+                
+                print(f"✅ Extracted from image: {message[:100]}...")
+                
+            except Exception as e:
+                print(f"❌ Image processing error: {e}")
+                import traceback
+                traceback.print_exc()
+                return "I received your image but encountered an error processing it. Please try sending it again or describe the issue in text."
+        
+        # If still no message after image processing
+        if not message or message.strip() == "":
+            return "I didn't receive any text or couldn't extract information from your image. Please try:\n• Typing your grievance\n• Sending a clearer photo\n• Describing the issue in text"
         
         print("🤖 Analyzing message with Gemini AI...")
         chat = LlmChat(
