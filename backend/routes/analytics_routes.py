@@ -88,8 +88,15 @@ async def get_dashboard_stats(current_user: TokenData = Depends(get_current_user
     
     supabase = get_supabase()
     
-    grievances = supabase.table('grievances').select('status').eq('politician_id', current_user.politician_id).execute()
-    posts = supabase.table('posts').select('status').eq('politician_id', current_user.politician_id).execute()
+    try:
+        grievances = supabase.table('grievances').select('status').eq('politician_id', current_user.politician_id).execute()
+    except:
+        grievances = type('obj', (object,), {'data': []})()
+    
+    try:
+        posts = supabase.table('posts').select('status').eq('politician_id', current_user.politician_id).execute()
+    except:
+        posts = type('obj', (object,), {'data': []})()
     
     resolved_grievances = len([g for g in grievances.data if g.get('status', '').upper() == 'RESOLVED'])
     published_posts = len([p for p in posts.data if p.get('status', '').upper() == 'PUBLISHED'])
