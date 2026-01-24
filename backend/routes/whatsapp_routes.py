@@ -408,7 +408,6 @@ Respond ONLY with valid JSON, no markdown."""
         summary = message[:100]
         
         try:
-            import json
             analysis = json.loads(ai_response.replace('```json', '').replace('```', '').strip())
             priority = analysis.get('priority', 5)
             category = analysis.get('category', 'Other')
