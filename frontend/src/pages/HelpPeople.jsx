@@ -6,12 +6,14 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
 import { Badge } from '../components/ui/badge';
-import { Phone, MessageSquare, FileText, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Phone, MessageSquare, FileText, Loader2, AlertCircle, CheckCircle2, Clock, TrendingUp, AlertTriangle } from 'lucide-react';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
 export default function HelpPeople({ user }) {
   const [grievances, setGrievances] = useState([]);
+  const [metrics, setMetrics] = useState(null);
+  const [topPriority, setTopPriority] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({
@@ -23,6 +25,7 @@ export default function HelpPeople({ user }) {
 
   useEffect(() => {
     fetchGrievances();
+    fetchMetrics();
   }, []);
 
   const fetchGrievances = async () => {
@@ -32,12 +35,72 @@ export default function HelpPeople({ user }) {
         headers: { Authorization: `Bearer ${token}` }
       });
       setGrievances(response.data);
+      
+      // Calculate top priority issues
+      const sorted = [...response.data].sort((a, b) => {
+        const priorityA = calculateDynamicPriority(a);
+        const priorityB = calculateDynamicPriority(b);
+        return priorityB - priorityA;
+      });
+      setTopPriority(sorted.slice(0, 3));
     } catch (error) {
       console.error('Error fetching grievances:', error);
       toast.error('Failed to load grievances');
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchMetrics = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`${BACKEND_URL}/api/grievances/metrics`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setMetrics(response.data);
+    } catch (error) {
+      console.error('Error fetching metrics:', error);
+    }
+  };
+
+  const calculateDynamicPriority = (grievance) => {
+    // Dynamic priority calculation based on multiple factors
+    let priority = grievance.ai_priority || 5;
+    
+    // Factor 1: Time elapsed (pending longer = higher priority)
+    const createdDate = new Date(grievance.created_at);
+    const now = new Date();
+    const daysElapsed = Math.floor((now - createdDate) / (1000 * 60 * 60 * 24));
+    
+    // Add 0.5 points per day for pending issues
+    if (grievance.status === 'PENDING') {
+      priority += (daysElapsed * 0.5);
+    }
+    
+    // Factor 2: Category urgency multiplier
+    const categoryMultipliers = {
+      'Healthcare': 1.3,
+      'Infrastructure': 1.2,
+      'Emergency': 1.5,
+      'Education': 1.0,
+      'Employment': 1.0,
+      'Social Welfare': 1.1,
+      'Other': 1.0
+    };
+    priority *= (categoryMultipliers[grievance.issue_type] || 1.0);
+    
+    // Factor 3: Status penalty (in_progress gets slight boost)
+    if (grievance.status === 'IN_PROGRESS') {
+      priority += 1;
+    }
+    
+    return Math.min(priority, 10); // Cap at 10
+  };
+
+  const getDaysElapsed = (createdAt) => {
+    const created = new Date(createdAt);
+    const now = new Date();
+    return Math.floor((now - created) / (1000 * 60 * 60 * 24));
   };
 
   const handleSubmit = async (e) => {
@@ -78,6 +141,7 @@ export default function HelpPeople({ user }) {
       setShowForm(false);
       setFormData({ village: '', description: '', issue_type: 'Other' });
       fetchGrievances();
+      fetchMetrics();
     } catch (error) {
       console.error('Error submitting grievance:', error);
       toast.error('Failed to register grievance');
@@ -96,6 +160,7 @@ export default function HelpPeople({ user }) {
       );
       toast.success(`Grievance marked as ${status}`);
       fetchGrievances();
+      fetchMetrics();
     } catch (error) {
       console.error('Error updating status:', error);
       toast.error('Failed to update status');
@@ -153,6 +218,132 @@ export default function HelpPeople({ user }) {
           Add Grievance
         </Button>
       </div>
+
+      {/* Metrics Cards */}
+      {metrics && (
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="grid grid-cols-1 md:grid-cols-4 gap-6"
+        >
+          <div className="executive-card p-6 hover:glow-orange" data-testid="metric-total">
+            <div className="flex items-center justify-between mb-4">
+              <FileText className="h-8 w-8 text-orange-500" />
+              <span className="text-xs uppercase tracking-wider text-slate-500">Total</span>
+            </div>
+            <p className="text-3xl font-bold text-slate-50">{metrics.total}</p>
+            <p className="text-sm text-slate-400 mt-1">All Grievances</p>
+          </div>
+
+          <div className="executive-card p-6 hover:glow-orange" data-testid="metric-resolved">
+            <div className="flex items-center justify-between mb-4">
+              <CheckCircle2 className="h-8 w-8 text-emerald-400" />
+              <span className="text-xs uppercase tracking-wider text-slate-500">Resolved</span>
+            </div>
+            <p className="text-3xl font-bold text-emerald-400">{metrics.resolved}</p>
+            <p className="text-sm text-slate-400 mt-1">{metrics.resolution_rate}% Success Rate</p>
+          </div>
+
+          <div className="executive-card p-6 hover:glow-orange" data-testid="metric-pending">
+            <div className="flex items-center justify-between mb-4">
+              <Clock className="h-8 w-8 text-amber-400" />
+              <span className="text-xs uppercase tracking-wider text-slate-500">Pending</span>
+            </div>
+            <p className="text-3xl font-bold text-amber-400">{metrics.unresolved}</p>
+            <p className="text-sm text-slate-400 mt-1">Awaiting Action</p>
+          </div>
+
+          <div className="executive-card p-6 hover:glow-orange" data-testid="metric-overdue">
+            <div className="flex items-center justify-between mb-4">
+              <AlertTriangle className="h-8 w-8 text-rose-400" />
+              <span className="text-xs uppercase tracking-wider text-slate-500">Long Pending</span>
+            </div>
+            <p className="text-3xl font-bold text-rose-400">{metrics.long_pending}</p>
+            <p className="text-sm text-slate-400 mt-1">Over {metrics.long_pending_days} Days</p>
+          </div>
+        </motion.div>
+      )}
+
+      {/* Top Priority Issues */}
+      {topPriority.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="executive-card p-8"
+          data-testid="top-priority-section"
+        >
+          <div className="flex items-center gap-3 mb-6">
+            <TrendingUp className="h-6 w-6 text-rose-400" />
+            <h3 className="text-2xl font-semibold text-slate-50">Top Priority Issues</h3>
+            <Badge className="bg-rose-500/10 text-rose-400 border-rose-500/20">Urgent Attention Required</Badge>
+          </div>
+          <div className="space-y-4">
+            {topPriority.map((grievance, index) => {
+              const dynamicPriority = calculateDynamicPriority(grievance);
+              const daysElapsed = getDaysElapsed(grievance.created_at);
+              return (
+                <div
+                  key={grievance.id}
+                  data-testid={`top-priority-${index + 1}`}
+                  className="bg-slate-950 rounded-2xl p-6 border-2 border-rose-500/30 hover:border-rose-500/50 transition-colors relative overflow-hidden"
+                >
+                  <div className="absolute top-0 left-0 w-2 h-full bg-gradient-to-b from-rose-500 to-orange-500"></div>
+                  <div className="flex items-start justify-between ml-4">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-3">
+                        <span className="text-2xl font-bold text-rose-400">#{index + 1}</span>
+                        <h4 className="font-semibold text-slate-200 text-lg">{grievance.village || 'Unknown Location'}</h4>
+                        <Badge className={getStatusColor(grievance.status)}>
+                          {(grievance.status || 'pending').replace('_', ' ')}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center gap-4 text-sm mb-3">
+                        <span className="flex items-center gap-1 text-slate-400">
+                          <FileText className="h-3 w-3" />
+                          {grievance.issue_type || 'Other'}
+                        </span>
+                        <span className="flex items-center gap-1 text-amber-400">
+                          <Clock className="h-3 w-3" />
+                          {daysElapsed} days ago
+                        </span>
+                        <span className={`text-sm font-bold ${getPriorityColor(dynamicPriority)}`}>
+                          Dynamic Priority: {dynamicPriority.toFixed(1)}/10
+                        </span>
+                      </div>
+                      <p className="text-slate-300 mb-4">{grievance.description || 'No description'}</p>
+                      <div className="flex gap-2">
+                        {grievance.status === 'PENDING' && (
+                          <Button
+                            onClick={() => updateStatus(grievance.id, 'IN_PROGRESS')}
+                            size="sm"
+                            className="bg-sky-500/10 text-sky-400 hover:bg-sky-500/20 rounded-full pill-button"
+                          >
+                            Start Work Now
+                          </Button>
+                        )}
+                        {grievance.status === 'IN_PROGRESS' && (
+                          <Button
+                            onClick={() => updateStatus(grievance.id, 'RESOLVED')}
+                            size="sm"
+                            className="bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 rounded-full pill-button"
+                          >
+                            <CheckCircle2 className="h-3 w-3 mr-1" />
+                            Mark Resolved
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-xs uppercase tracking-wider text-slate-500 mb-1">Base AI Score</div>
+                      <div className="text-2xl font-bold text-orange-500">{grievance.ai_priority || 5}/10</div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </motion.div>
+      )}
 
       {showForm && (
         <motion.div
@@ -232,65 +423,73 @@ export default function HelpPeople({ user }) {
       )}
 
       <div className="executive-card p-8" data-testid="grievances-list">
-        <h3 className="text-2xl font-semibold text-slate-50 mb-6">Active Grievances</h3>
+        <h3 className="text-2xl font-semibold text-slate-50 mb-6">All Grievances</h3>
         <div className="space-y-4">
           {grievances.length === 0 ? (
             <p className="text-slate-400 text-center py-8">No grievances registered yet</p>
           ) : (
-            grievances.map((grievance) => (
-              <motion.div
-                key={grievance.id}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                data-testid={`grievance-${grievance.id}`}
-                className="bg-slate-950 rounded-2xl p-6 border border-slate-800 hover:border-orange-500/30 transition-colors"
-              >
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
-                      <h4 className="font-semibold text-slate-200 text-lg">{grievance.village || 'Unknown Location'}</h4>
-                      <Badge className={getStatusColor(grievance.status)}>
-                        {(grievance.status || 'pending').replace('_', ' ')}
-                      </Badge>
-                      <span className={`text-sm font-semibold ${getPriorityColor(grievance.ai_priority || 5)}`}>
-                        Priority: {grievance.ai_priority || 5}/10
-                      </span>
+            grievances.map((grievance) => {
+              const daysElapsed = getDaysElapsed(grievance.created_at);
+              const dynamicPriority = calculateDynamicPriority(grievance);
+              return (
+                <motion.div
+                  key={grievance.id}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  data-testid={`grievance-${grievance.id}`}
+                  className="bg-slate-950 rounded-2xl p-6 border border-slate-800 hover:border-orange-500/30 transition-colors"
+                >
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2">
+                        <h4 className="font-semibold text-slate-200 text-lg">{grievance.village || 'Unknown Location'}</h4>
+                        <Badge className={getStatusColor(grievance.status)}>
+                          {(grievance.status || 'pending').replace('_', ' ')}
+                        </Badge>
+                        <span className={`text-sm font-semibold ${getPriorityColor(dynamicPriority)}`}>
+                          Priority: {dynamicPriority.toFixed(1)}/10
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-4 text-sm text-slate-400 mb-3">
+                        <span className="flex items-center gap-1">
+                          <FileText className="h-3 w-3" />
+                          {grievance.issue_type || 'Other'}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Clock className="h-3 w-3" />
+                          {daysElapsed} days ago
+                        </span>
+                        <span>ID: {grievance.id?.substring(0, 8).toUpperCase()}</span>
+                      </div>
+                      <p className="text-slate-300">{grievance.description || 'No description'}</p>
                     </div>
-                    <div className="flex items-center gap-4 text-sm text-slate-400 mb-3">
-                      <span className="flex items-center gap-1">
-                        <FileText className="h-3 w-3" />
-                        {grievance.issue_type || 'Other'}
-                      </span>
-                      <span>ID: {grievance.id?.substring(0, 8).toUpperCase()}</span>
-                    </div>
-                    <p className="text-slate-300">{grievance.description || 'No description'}</p>
                   </div>
-                </div>
-                <div className="flex gap-2 mt-4">
-                  {grievance.status === 'PENDING' && (
-                    <Button
-                      onClick={() => updateStatus(grievance.id, 'IN_PROGRESS')}
-                      data-testid={`start-work-${grievance.id}`}
-                      size="sm"
-                      className="bg-sky-500/10 text-sky-400 hover:bg-sky-500/20 rounded-full pill-button"
-                    >
-                      Start Work
-                    </Button>
-                  )}
-                  {grievance.status === 'IN_PROGRESS' && (
-                    <Button
-                      onClick={() => updateStatus(grievance.id, 'RESOLVED')}
-                      data-testid={`resolve-${grievance.id}`}
-                      size="sm"
-                      className="bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 rounded-full pill-button"
-                    >
-                      <CheckCircle2 className="h-3 w-3 mr-1" />
-                      Mark Resolved
-                    </Button>
-                  )}
-                </div>
-              </motion.div>
-            ))
+                  <div className="flex gap-2 mt-4">
+                    {grievance.status === 'PENDING' && (
+                      <Button
+                        onClick={() => updateStatus(grievance.id, 'IN_PROGRESS')}
+                        data-testid={`start-work-${grievance.id}`}
+                        size="sm"
+                        className="bg-sky-500/10 text-sky-400 hover:bg-sky-500/20 rounded-full pill-button"
+                      >
+                        Start Work
+                      </Button>
+                    )}
+                    {grievance.status === 'IN_PROGRESS' && (
+                      <Button
+                        onClick={() => updateStatus(grievance.id, 'RESOLVED')}
+                        data-testid={`resolve-${grievance.id}`}
+                        size="sm"
+                        className="bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 rounded-full pill-button"
+                      >
+                        <CheckCircle2 className="h-3 w-3 mr-1" />
+                        Mark Resolved
+                      </Button>
+                    )}
+                  </div>
+                </motion.div>
+              );
+            })
           )}
         </div>
       </div>
