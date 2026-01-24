@@ -5,7 +5,7 @@ import os
 import logging
 from pathlib import Path
 
-from routes import auth_routes, grievance_routes, posts_routes, analytics_routes, ai_routes, whatsapp_routes
+from routes import auth_routes, grievance_routes, posts_routes, analytics_routes, ai_routes, whatsapp_routes, verification_routes
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -20,6 +20,7 @@ api_router.include_router(posts_routes.router, prefix="/posts", tags=["posts"])
 api_router.include_router(analytics_routes.router, prefix="/analytics", tags=["analytics"])
 api_router.include_router(ai_routes.router, prefix="/ai", tags=["ai"])
 api_router.include_router(whatsapp_routes.router, prefix="/whatsapp", tags=["whatsapp"])
+api_router.include_router(verification_routes.router, prefix="/verification", tags=["verification"])
 
 @api_router.get("/")
 async def root():
