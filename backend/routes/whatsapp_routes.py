@@ -402,6 +402,8 @@ Respond with JSON only:
                 timeout=30.0
             )
             
+            print(f"🔍 Intent API response status: {intent_response.status_code}")
+            
             intent = "GRIEVANCE"  # Default to grievance
             ai_response_text = ""
             priority = 5
@@ -410,8 +412,12 @@ Respond with JSON only:
             
             if intent_response.status_code == 200:
                 intent_data = intent_response.json()
+                print(f"🔍 Raw intent data: {str(intent_data)[:500]}")
+                
                 if intent_data.get("candidates"):
                     result_text = intent_data["candidates"][0]["content"]["parts"][0]["text"]
+                    print(f"🔍 Result text: {result_text[:300]}")
+                    
                     try:
                         analysis = json.loads(result_text.replace('```json', '').replace('```', '').strip())
                         intent = analysis.get("intent", "GRIEVANCE").upper()
@@ -419,6 +425,7 @@ Respond with JSON only:
                         ai_response_text = analysis.get("response", "")
                         
                         print(f"🎯 Detected intent: {intent} (confidence: {confidence})")
+                        print(f"🎯 AI response: {ai_response_text[:100]}")
                         
                         # Handle non-grievance intents
                         if intent == "QUERY" and confidence > 0.6:
