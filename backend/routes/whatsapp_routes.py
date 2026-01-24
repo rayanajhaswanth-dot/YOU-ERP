@@ -364,108 +364,93 @@ SCHEMA:
         
         print("🤖 Analyzing message intent with AI...")
         
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            # First, detect message intent
+        intent = "GRIEVANCE"  # Default to grievance
+        ai_response_text = ""
+        priority = 5
+        category = "Other"
+        summary = message[:100]
+        
+        try:
+            # Use emergentintegrations for intent detection
+            chat = LlmChat(
+                api_key=EMERGENT_LLM_KEY,
+                session_id=f"intent-{phone}-{uuid.uuid4()}",
+                system_message="You are an intelligent assistant for a legislator's office. Analyze messages and determine if they are queries or grievances."
+            ).with_model("gemini", "gemini-2.0-flash")
+            
             intent_prompt = f"""Analyze this message from a citizen contacting a legislator's office:
 
 MESSAGE: "{message}"
 
 Determine the intent:
-1. QUERY - If they're asking a question, seeking information, or making an inquiry
-2. GRIEVANCE - If they're reporting a problem, complaint, or issue that needs action
+1. QUERY - If they're asking a question, seeking information, or making an inquiry (e.g., "What documents do I need?", "How do I apply for...?", "What is the process for...?")
+2. GRIEVANCE - If they're reporting a problem, complaint, or issue that needs action (e.g., "No water supply", "Road is damaged", "Electricity problem")
 3. GREETING - If they're just saying hello or making casual conversation
-4. FOLLOWUP - If they're asking about status of an existing issue
+4. FOLLOWUP - If they're asking about status of an existing issue (e.g., "What happened to my complaint?")
 5. THANKS - If they're expressing gratitude
 
-Also, if it's a QUERY, provide a helpful response based on common governance topics.
+If it's a QUERY, provide a helpful response answering their question.
 
-Respond with JSON only:
-{{
-    "intent": "QUERY|GRIEVANCE|GREETING|FOLLOWUP|THANKS",
-    "confidence": 0.0-1.0,
-    "response": "If QUERY/GREETING/FOLLOWUP/THANKS, provide a helpful response in 2-3 sentences. If GRIEVANCE, leave empty.",
-    "grievance_details": {{
-        "priority": 1-10 (only if GRIEVANCE),
-        "category": "Infrastructure/Water/Electricity/Roads/Healthcare/Education/Sanitation/Other",
-        "summary": "brief summary"
-    }}
-}}"""
+Respond with JSON only (no markdown):
+{{"intent": "QUERY|GRIEVANCE|GREETING|FOLLOWUP|THANKS", "confidence": 0.0-1.0, "response": "helpful response if QUERY/GREETING/FOLLOWUP/THANKS, empty if GRIEVANCE", "priority": 1-10, "category": "Infrastructure/Water/Electricity/Roads/Healthcare/Education/Sanitation/Other", "summary": "brief summary"}}"""
             
-            gemini_payload = {
-                "contents": [{"parts": [{"text": intent_prompt}]}]
-            }
+            user_msg = UserMessage(text=intent_prompt)
+            ai_result = await chat.send_message(user_msg)
             
-            intent_response = await client.post(
-                f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={EMERGENT_LLM_KEY}",
-                json=gemini_payload,
-                timeout=30.0
-            )
+            print(f"🔍 AI Intent Result: {ai_result[:300]}")
             
-            print(f"🔍 Intent API response status: {intent_response.status_code}")
-            if intent_response.status_code != 200:
-                print(f"🔍 Intent API error: {intent_response.text[:300]}")
-            
-            intent = "GRIEVANCE"  # Default to grievance
-            ai_response_text = ""
-            priority = 5
-            category = "Other"
-            summary = message[:100]
-            
-            if intent_response.status_code == 200:
-                intent_data = intent_response.json()
-                print(f"🔍 Raw intent data: {str(intent_data)[:500]}")
+            # Parse the response
+            try:
+                # Clean up the response
+                clean_result = ai_result.replace('```json', '').replace('```', '').strip()
+                analysis = json.loads(clean_result)
                 
-                if intent_data.get("candidates"):
-                    result_text = intent_data["candidates"][0]["content"]["parts"][0]["text"]
-                    print(f"🔍 Result text: {result_text[:300]}")
+                intent = analysis.get("intent", "GRIEVANCE").upper()
+                confidence = float(analysis.get("confidence", 0.5))
+                ai_response_text = analysis.get("response", "")
+                priority = int(analysis.get("priority", 5))
+                category = analysis.get("category", "Other")
+                summary = analysis.get("summary", message[:100])
+                
+                print(f"🎯 Detected intent: {intent} (confidence: {confidence})")
+                
+                # Handle non-grievance intents
+                if intent == "QUERY" and confidence > 0.5:
+                    response_text = ai_response_text if ai_response_text else "I understand you have a question. Let me help you with that."
+                    return f"📝 {response_text}\n\n💡 If you have a specific complaint or issue that needs action, please describe it and I'll register it as a grievance."
+                
+                elif intent == "GREETING":
+                    return f"Namaste {name}! 🙏\n\n{ai_response_text if ai_response_text else 'Welcome to the Governance Helpline!'}\n\nHow can I help you today?\n• Report a problem or grievance\n• Send a photo of an issue\n• Record a voice message 🎤\n• Type 'status' to check your grievances"
+                
+                elif intent == "FOLLOWUP":
+                    # Get their recent grievances
+                    recent = supabase.table('grievances').select('*').ilike('village', f'%{phone}%').order('created_at', desc=True).limit(3).execute()
                     
-                    try:
-                        analysis = json.loads(result_text.replace('```json', '').replace('```', '').strip())
-                        intent = analysis.get("intent", "GRIEVANCE").upper()
-                        confidence = analysis.get("confidence", 0.5)
-                        ai_response_text = analysis.get("response", "")
-                        
-                        print(f"🎯 Detected intent: {intent} (confidence: {confidence})")
-                        print(f"🎯 AI response: {ai_response_text[:100]}")
-                        
-                        # Handle non-grievance intents
-                        if intent == "QUERY" and confidence > 0.6:
-                            return f"📝 {ai_response_text}\n\nIf you have a specific complaint or issue that needs action, please describe it and I'll register it as a grievance."
-                        
-                        elif intent == "GREETING":
-                            return f"Namaste {name}! 🙏 {ai_response_text}\n\nHow can I help you today? You can:\n• Report a problem or grievance\n• Send a photo of an issue\n• Record a voice message\n• Type 'status' to check existing grievances"
-                        
-                        elif intent == "FOLLOWUP":
-                            # Get their recent grievances
-                            recent = supabase.table('grievances').select('*').ilike('village', f'%{phone}%').order('created_at', desc=True).limit(3).execute()
-                            
-                            if recent.data:
-                                status_text = f"📊 Your Recent Grievances:\n\n"
-                                for idx, g in enumerate(recent.data, 1):
-                                    status_emoji = {'PENDING': '⏳', 'IN_PROGRESS': '🔄', 'RESOLVED': '✅'}.get(g.get('status', '').upper(), '📝')
-                                    p = g.get('ai_priority', 5)
-                                    desc = g.get('description', 'No description')[:60]
-                                    created = g.get('created_at', '')[:10]
-                                    status_text += f"{idx}. {status_emoji} {g.get('status', 'PENDING')}\n   📅 {created}\n   ⚡ Priority: {p}/10\n   📝 {desc}...\n\n"
-                                return status_text + "\n💬 Need to add more details? Just type your update."
-                            else:
-                                return f"{ai_response_text}\n\nI don't see any recent grievances from your number. Would you like to register a new one?"
-                        
-                        elif intent == "THANKS":
-                            return f"🙏 You're welcome, {name}! {ai_response_text}\n\nIs there anything else I can help you with?"
-                        
-                        # If it's a grievance, extract details
-                        if intent == "GRIEVANCE":
-                            details = analysis.get("grievance_details", {})
-                            priority = details.get("priority", 5)
-                            category = details.get("category", "Other")
-                            summary = details.get("summary", message[:100])
-                            
-                    except json.JSONDecodeError:
-                        print("⚠️ Could not parse intent response, treating as grievance")
+                    if recent.data:
+                        status_text = f"📊 Your Recent Grievances:\n\n"
+                        for idx, g in enumerate(recent.data, 1):
+                            status_emoji = {'PENDING': '⏳', 'IN_PROGRESS': '🔄', 'RESOLVED': '✅'}.get(g.get('status', '').upper(), '📝')
+                            p = g.get('ai_priority', 5)
+                            desc = g.get('description', 'No description')[:60]
+                            created = g.get('created_at', '')[:10]
+                            status_text += f"{idx}. {status_emoji} {g.get('status', 'PENDING')}\n   📅 {created}\n   ⚡ Priority: {p}/10\n   📝 {desc}...\n\n"
+                        return status_text + "💬 Need to add more details or have a new issue? Just type it."
+                    else:
+                        return f"I don't see any recent grievances from your number.\n\nWould you like to register a new complaint? Just describe your issue and I'll help you."
+                
+                elif intent == "THANKS":
+                    return f"🙏 You're welcome, {name}!\n\n{ai_response_text if ai_response_text else 'Happy to help!'}\n\nIs there anything else I can assist you with?"
+                    
+            except json.JSONDecodeError as je:
+                print(f"⚠️ JSON parse error: {je}")
+                # Continue with grievance registration
+                
+        except Exception as e:
+            print(f"⚠️ Intent detection error: {e}")
+            # Continue with grievance registration as fallback
         
         # ============================================================
-        # GRIEVANCE REGISTRATION
+        # GRIEVANCE REGISTRATION (if not handled above)
         # ============================================================
         
         print(f"📝 Registering grievance - Category: {category}, Priority: {priority}")
