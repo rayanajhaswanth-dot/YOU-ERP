@@ -33,7 +33,7 @@ OR go directly to:
 2. Find the field: **"WHEN A MESSAGE COMES IN"**
 3. Enter this URL:
    ```
-   https://legiflow.preview.emergentagent.com/api/whatsapp/webhook
+   https://legislator-hub.preview.emergentagent.com/api/whatsapp/webhook
    ```
 4. Set method to: **POST**
 5. Click **"Save"**
@@ -88,7 +88,7 @@ Expected response: Instructions on how to use the bot
 
 1. **Check webhook is saved:**
    - Go back to Twilio console
-   - Verify the webhook URL is showing: `https://legiflow.preview.emergentagent.com/api/whatsapp/webhook`
+   - Verify the webhook URL is showing: `https://legislator-hub.preview.emergentagent.com/api/whatsapp/webhook`
    - Verify method is: POST
 
 2. **Check sandbox is active:**
@@ -104,7 +104,7 @@ Expected response: Instructions on how to use the bot
 
 ## 📊 What's Working Now
 
-✅ **Webhook endpoint**: https://legiflow.preview.emergentagent.com/api/whatsapp/webhook  
+✅ **Webhook endpoint**: https://legislator-hub.preview.emergentagent.com/api/whatsapp/webhook  
 ✅ **Incoming messages**: Being received and logged  
 ✅ **Outgoing messages**: Can send successfully  
 ✅ **AI Processing**: Gemini is analyzing and responding  
@@ -114,7 +114,7 @@ Expected response: Instructions on how to use the bot
 
 1. **You send**: "Water problem in my area"
 2. **Twilio receives** your message
-3. **Twilio calls** your webhook: `https://legiflow.preview.emergentagent.com/api/whatsapp/webhook`
+3. **Twilio calls** your webhook: `https://legislator-hub.preview.emergentagent.com/api/whatsapp/webhook`
 4. **Your bot** processes with AI
 5. **Bot creates** grievance in database
 6. **Bot returns** TwiML response with confirmation message
@@ -151,4 +151,4 @@ Now we just need to configure the webhook so it can **reply automatically** when
 **Message Status**: Sent (SID: SM2c2353b05c3cc8c70308f7ea7bedbcae)  
 **Your Number**: +917075590704  
 **Bot Number**: +1 (415) 523-8886  
-**Webhook URL**: https://legiflow.preview.emergentagent.com/api/whatsapp/webhook
+**Webhook URL**: https://legislator-hub.preview.emergentagent.com/api/whatsapp/webhook
