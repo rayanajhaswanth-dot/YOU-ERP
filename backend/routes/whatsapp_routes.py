@@ -468,14 +468,32 @@ Return JSON: {
                         print(f"❌ GPT-4o API error: {error_text}")
                         
             except Exception as e:
-                print(f"❌ Media processing error: {e}")
+                error_msg = str(e)
+                print(f"❌ [STAGE: {current_stage}] Media processing error: {error_msg}")
                 import traceback
                 traceback.print_exc()
                 
+                # Self-diagnostic suggestions based on failure stage
+                suggestion = ""
+                if current_stage == "TWILIO_DOWNLOAD":
+                    if "401" in error_msg or "Auth" in error_msg:
+                        suggestion = "\n\n🔧 DIAGNOSIS: Twilio credentials may be incorrect. Please verify TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN."
+                    else:
+                        suggestion = "\n\n🔧 DIAGNOSIS: Could not download media from Twilio. The media URL may have expired."
+                elif current_stage == "SUPABASE_UPLOAD":
+                    if "404" in error_msg:
+                        suggestion = "\n\n🔧 DIAGNOSIS: Storage bucket 'Grievances' may not exist in Supabase."
+                    elif "401" in error_msg or "403" in error_msg:
+                        suggestion = "\n\n🔧 DIAGNOSIS: Supabase service key may be incorrect."
+                elif current_stage == "SARVAM_AI_PROCESSING":
+                    suggestion = "\n\n🔧 DIAGNOSIS: Sarvam AI transcription failed. Check SARVAM_API_KEY."
+                elif current_stage == "GPT4o_ANALYSIS":
+                    suggestion = "\n\n🔧 DIAGNOSIS: OpenAI/GPT-4o analysis failed. Check API credits or key."
+                
                 if is_audio:
-                    return "🎤 I received your voice message but encountered an error processing it. Please try:\n• Recording again with clear audio\n• Speaking closer to the microphone\n• Or typing your grievance instead"
+                    return f"🎤 I received your voice message but encountered an error processing it. Please try:\n• Recording again with clear audio\n• Speaking closer to the microphone\n• Or typing your grievance instead{suggestion}"
                 else:
-                    return "📸 I received your image but encountered an error processing it. Please try:\n• Sending a clearer image\n• Or describing the issue in text"
+                    return f"📸 I received your image but encountered an error processing it. Please try:\n• Sending a clearer image\n• Or describing the issue in text{suggestion}"
         
         # If still no message after media processing
         if not message or message.strip() == "":
