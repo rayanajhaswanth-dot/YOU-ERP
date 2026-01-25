@@ -450,15 +450,21 @@ Return JSON ONLY (no markdown, no code blocks): {
                         
                         # Create message with image if available
                         if is_image and media_obj:
-                            # Use base64 for emergentintegrations
-                            image_base64 = base64.b64encode(media_obj['buffer']).decode('utf-8')
+                            # Save image to temp file (FileContentWithMimeType requires file_path)
                             mime_type = media_obj['content_type']
+                            ext = mime_type.split('/')[-1] if '/' in mime_type else 'jpg'
+                            temp_file_path = f"/tmp/whatsapp_image_{uuid.uuid4()}.{ext}"
+                            
+                            with open(temp_file_path, 'wb') as f:
+                                f.write(media_obj['buffer'])
+                            
+                            print(f"[STAGE: {current_stage}] Saved temp image: {temp_file_path}")
                             
                             vision_message = UserMessage(
                                 text=vision_prompt,
                                 file_content=FileContentWithMimeType(
-                                    content=image_base64,
-                                    mime_type=mime_type
+                                    mime_type=mime_type,
+                                    file_path=temp_file_path
                                 )
                             )
                         else:
@@ -467,6 +473,14 @@ Return JSON ONLY (no markdown, no code blocks): {
                         print(f"[STAGE: {current_stage}] Calling GPT-4o via emergentintegrations...")
                         result_text = await vision_chat.send_message(vision_message)
                         print(f"📸 GPT-4o raw response: {result_text[:300]}...")
+                        
+                        # Clean up temp file
+                        if is_image and media_obj:
+                            try:
+                                import os
+                                os.remove(temp_file_path)
+                            except:
+                                pass
                         
                         try:
                             grievance_json = json.loads(result_text.replace('```json', '').replace('```', '').strip())
@@ -487,6 +501,8 @@ Return JSON ONLY (no markdown, no code blocks): {
                             
                     except Exception as vision_err:
                         print(f"❌ [STAGE: {current_stage}] GPT-4o Vision error: {vision_err}")
+                        import traceback
+                        traceback.print_exc()
                         # If we have voice transcript, use that as the message
                         if voice_transcript:
                             message = voice_transcript
