@@ -422,7 +422,7 @@ Return JSON: {
                     
                     # Call GPT-4o Vision using emergentintegrations library
                     try:
-                        from emergentintegrations.llm.chat import LlmChat, UserMessage, FileContentWithMimeType
+                        from emergentintegrations.llm.chat import LlmChat, UserMessage, FileContent
                         
                         vision_chat = LlmChat(
                             api_key=EMERGENT_LLM_KEY,
@@ -450,22 +450,20 @@ Return JSON ONLY (no markdown, no code blocks): {
                         
                         # Create message with image if available
                         if is_image and media_obj:
-                            # Save image to temp file (FileContentWithMimeType requires file_path)
+                            # Encode image as base64
+                            image_base64 = base64.b64encode(media_obj['buffer']).decode('utf-8')
                             mime_type = media_obj['content_type']
-                            ext = mime_type.split('/')[-1] if '/' in mime_type else 'jpg'
-                            temp_file_path = f"/tmp/whatsapp_image_{uuid.uuid4()}.{ext}"
                             
-                            with open(temp_file_path, 'wb') as f:
-                                f.write(media_obj['buffer'])
-                            
-                            print(f"[STAGE: {current_stage}] Saved temp image: {temp_file_path}")
+                            print(f"[STAGE: {current_stage}] Using FileContent with base64 ({len(image_base64)} chars)")
                             
                             vision_message = UserMessage(
                                 text=vision_prompt,
-                                file_content=FileContentWithMimeType(
-                                    mime_type=mime_type,
-                                    file_path=temp_file_path
-                                )
+                                file_contents=[
+                                    FileContent(
+                                        content_type=mime_type,
+                                        file_content_base64=image_base64
+                                    )
+                                ]
                             )
                         else:
                             vision_message = UserMessage(text=vision_prompt)
@@ -473,14 +471,6 @@ Return JSON ONLY (no markdown, no code blocks): {
                         print(f"[STAGE: {current_stage}] Calling GPT-4o via emergentintegrations...")
                         result_text = await vision_chat.send_message(vision_message)
                         print(f"📸 GPT-4o raw response: {result_text[:300]}...")
-                        
-                        # Clean up temp file
-                        if is_image and media_obj:
-                            try:
-                                import os
-                                os.remove(temp_file_path)
-                            except:
-                                pass
                         
                         try:
                             grievance_json = json.loads(result_text.replace('```json', '').replace('```', '').strip())
