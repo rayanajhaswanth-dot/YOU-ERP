@@ -363,10 +363,11 @@ async def process_whatsapp_message(
                             else:
                                 print(f"⚠️ Sarvam error: {sarvam_response.status_code}")
                         except Exception as sarvam_err:
-                            print(f"⚠️ Sarvam skipped: {sarvam_err}")
+                            print(f"⚠️ [STAGE: {current_stage}] Sarvam skipped: {sarvam_err}")
                     
                     # STEP 4: GPT-4o Analysis
-                    print(f"[DEBUG] Step 4: GPT-4o Analysis...")
+                    current_stage = "GPT4o_ANALYSIS"
+                    print(f"[STAGE: {current_stage}] Step 4: GPT-4o Analysis...")
                     
                     # Build GPT-4o messages
                     gpt_messages = [
@@ -400,16 +401,18 @@ Return JSON: {
                     
                     gpt_messages[1]["content"].append({"type": "text", "text": prompt_text})
                     
-                    # Add image URL for GPT-4o (use storage URL if available, else base64)
+                    # Add image URL for GPT-4o (use signed URL if available, else base64)
                     if is_image:
                         if stored_image_url:
-                            # Use the clean storage URL (lighter payload)
+                            # Use the signed storage URL (lighter payload, private bucket compatible)
+                            print(f"[STAGE: {current_stage}] Using signed URL for GPT-4o")
                             gpt_messages[1]["content"].append({
                                 "type": "image_url",
                                 "image_url": {"url": stored_image_url, "detail": "high"}
                             })
                         else:
                             # Fallback to base64
+                            print(f"[STAGE: {current_stage}] Using base64 fallback for GPT-4o")
                             image_base64 = base64.b64encode(media_obj['buffer']).decode('utf-8')
                             data_url = f"data:{media_obj['content_type']};base64,{image_base64}"
                             gpt_messages[1]["content"].append({
