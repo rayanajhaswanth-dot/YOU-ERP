@@ -246,41 +246,56 @@ async def process_whatsapp_message(
         
         print(f"📊 Media detection: is_image={is_image}, is_audio={is_audio}, content_type={media_content_type}")
         
-        # STEP 1: Download media from Twilio (with extended timeout)
+        # ============================================================
+        # MULTIMODAL ORCHESTRATOR V9 - Storage Integration
+        # 1. Downloads media from Twilio with redirect handling
+        # 2. Uploads to Supabase Storage for persistence
+        # 3. Uses storage URL for GPT-4o (lighter payload)
+        # 4. Uses direct buffer for Sarvam (most reliable)
+        # ============================================================
+        
+        stored_image_url = None
+        stored_audio_url = None
+        
         if media_url and (is_audio or is_image):
-            print(f"📥 Step 1: Downloading media from Twilio...")
             try:
                 async with httpx.AsyncClient(timeout=120.0) as client:
-                    auth = (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
-                    media_response = await client.get(media_url, auth=auth, follow_redirects=True)
+                    # STEP 1: Download from Twilio with redirect handling
+                    print(f"[DEBUG] Step 1: Downloading from Twilio...")
+                    media_obj = await download_twilio_media(media_url, client)
                     
-                    if media_response.status_code != 200:
-                        raise Exception(f"Twilio HTTP {media_response.status_code}: {media_response.reason_phrase}")
+                    if not media_obj:
+                        raise Exception("Failed to download media from Twilio")
                     
-                    media_buffer = media_response.content
+                    # STEP 2: Persist to Supabase Storage
+                    print(f"[DEBUG] Step 2: Persisting to Storage Bucket...")
+                    try:
+                        if is_audio:
+                            stored_audio_url = await upload_to_supabase_storage(media_obj, 'audio', client)
+                        elif is_image:
+                            stored_image_url = await upload_to_supabase_storage(media_obj, 'images', client)
+                    except Exception as storage_err:
+                        print(f"⚠️ Storage upload failed (continuing): {storage_err}")
+                        # Continue processing even if storage fails
                     
-                    if len(media_buffer) == 0:
-                        raise Exception("Downloaded buffer is empty")
-                    
-                    print(f"📥 Downloaded {len(media_buffer)} bytes successfully")
-                    
+                    # STEP 3: Process Audio via Sarvam (using buffer directly)
                     if is_audio:
-                        # STEP 2: Process Voice via Sarvam AI
-                        print(f"🎤 Step 2: Processing Voice via Sarvam AI (saaras:v1)...")
+                        print(f"[DEBUG] Step 3: Sarvam Processing...")
                         try:
                             # Determine file type
-                            if 'ogg' in media_content_type or 'opus' in media_content_type:
+                            content_type = media_obj['content_type']
+                            if 'ogg' in content_type or 'opus' in content_type:
                                 filename = 'input.ogg'
                                 file_mime = 'audio/ogg'
-                            elif 'mp3' in media_content_type or 'mpeg' in media_content_type:
+                            elif 'mp3' in content_type or 'mpeg' in content_type:
                                 filename = 'input.mp3'
                                 file_mime = 'audio/mpeg'
                             else:
                                 filename = 'input.ogg'
                                 file_mime = 'audio/ogg'
                             
-                            # Upload to Sarvam using multipart form-data
-                            files = {'file': (filename, media_buffer, file_mime)}
+                            # Upload to Sarvam using buffer (most reliable)
+                            files = {'file': (filename, media_obj['buffer'], file_mime)}
                             data = {'model': 'saaras:v1'}
                             
                             sarvam_response = await client.post(
@@ -288,10 +303,8 @@ async def process_whatsapp_message(
                                 headers={"api-subscription-key": SARVAM_API_KEY},
                                 files=files,
                                 data=data,
-                                timeout=90.0  # Extended timeout for transcription
+                                timeout=90.0
                             )
-                            
-                            print(f"🎤 Sarvam response: {sarvam_response.status_code}")
                             
                             if sarvam_response.status_code == 200:
                                 sarvam_data = sarvam_response.json()
@@ -305,59 +318,122 @@ async def process_whatsapp_message(
                                     "en-IN": "English"
                                 }
                                 detected_lang = lang_map.get(language_code, language_code)
-                                
                                 voice_transcription = f"[Voice in {detected_lang}] {voice_transcript}"
+                                message = voice_transcript or message
                                 print(f"✅ Sarvam transcribed ({detected_lang}): {voice_transcript[:100]}...")
                             else:
-                                print(f"⚠️ Sarvam failed ({sarvam_response.status_code}): {sarvam_response.text[:200]}")
-                                # Fallback will use Gemini below
-                                
+                                print(f"⚠️ Sarvam error: {sarvam_response.status_code}")
                         except Exception as sarvam_err:
-                            print(f"⚠️ Sarvam processing error: {sarvam_err}")
-                        
-                        # STEP 3: Use Gemini for grievance extraction from voice
-                        print(f"🤖 Step 3: Registering Voice Grievance via Gemini...")
-                        
-                        prompt_text = f"""TASK: You are a Legislative Assistant for the 'YOU' Governance Platform.
-INPUT: A voice transcript: "{voice_transcript or 'Unable to transcribe'}"
-
-REQUIREMENT: Extract the constituent details and core grievance issue.
-Return ONLY a valid JSON object.
-
-SCHEMA:
-{{
-  "constituent_name": "name if mentioned, else 'Anonymous Citizen'",
-  "ward_number": "ward/village if mentioned, else 'Not specified'",
-  "issue_summary": "brief summary of the grievance",
-  "ai_priority": 1-10 based on urgency,
-  "category": "Infrastructure/Water/Electricity/Roads/Sanitation/Other",
-  "resolution_suggestion": "one sentence action for the OSD"
-}}"""
-                        
-                        gemini_payload = {
-                            "contents": [{"parts": [{"text": prompt_text}]}],
-                            "generationConfig": {"responseMimeType": "application/json"}
+                            print(f"⚠️ Sarvam skipped: {sarvam_err}")
+                    
+                    # STEP 4: GPT-4o Analysis
+                    print(f"[DEBUG] Step 4: GPT-4o Analysis...")
+                    
+                    # Build GPT-4o messages
+                    gpt_messages = [
+                        {
+                            "role": "system",
+                            "content": "You are a Legislative Assistant for the 'YOU' Governance Platform. Extract grievance details into JSON."
+                        },
+                        {
+                            "role": "user",
+                            "content": []
                         }
-                        
-                        gemini_response = await client.post(
-                            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={EMERGENT_LLM_KEY}",
-                            json=gemini_payload,
-                            timeout=60.0
-                        )
-                        
-                        if gemini_response.status_code == 200:
-                            gemini_data = gemini_response.json()
-                            if gemini_data.get("candidates"):
-                                result_text = gemini_data["candidates"][0]["content"]["parts"][0]["text"]
-                                try:
-                                    grievance_json = json.loads(result_text.replace('```json', '').replace('```', '').strip())
-                                    message = grievance_json.get("issue_summary", voice_transcript or message)
-                                    extracted_text = json.dumps(grievance_json)
-                                    print(f"✅ Gemini extracted grievance: {message[:100]}...")
-                                except:
-                                    message = voice_transcript or message
+                    ]
+                    
+                    # Build prompt based on available data
+                    if is_image and voice_transcript:
+                        prompt_text = f"TASK: Merge details from this letter image and voice transcript: \"{voice_transcript}\"."
+                    elif is_image:
+                        prompt_text = "TASK: OCR this physical letter or grievance image. Extract all text and identify the issue."
+                    else:
+                        prompt_text = f"TASK: Extract grievance details from voice transcript: \"{voice_transcript}\"."
+                    
+                    prompt_text += """
+Return JSON: { 
+    "constituent_name": "...", 
+    "ward_number": "...", 
+    "issue_summary": "...", 
+    "extracted_text": "full OCR text if image",
+    "ai_priority": 1-10, 
+    "category": "Infrastructure/Water/Electricity/Roads/Sanitation/Other"
+}"""
+                    
+                    gpt_messages[1]["content"].append({"type": "text", "text": prompt_text})
+                    
+                    # Add image URL for GPT-4o (use storage URL if available, else base64)
+                    if is_image:
+                        if stored_image_url:
+                            # Use the clean storage URL (lighter payload)
+                            gpt_messages[1]["content"].append({
+                                "type": "image_url",
+                                "image_url": {"url": stored_image_url, "detail": "high"}
+                            })
                         else:
-                            message = voice_transcript or message
+                            # Fallback to base64
+                            image_base64 = base64.b64encode(media_obj['buffer']).decode('utf-8')
+                            data_url = f"data:{media_obj['content_type']};base64,{image_base64}"
+                            gpt_messages[1]["content"].append({
+                                "type": "image_url",
+                                "image_url": {"url": data_url, "detail": "high"}
+                            })
+                    
+                    # Call GPT-4o
+                    openai_response = await client.post(
+                        "https://api.openai.com/v1/chat/completions",
+                        headers={
+                            "Authorization": f"Bearer {EMERGENT_LLM_KEY}",
+                            "Content-Type": "application/json"
+                        },
+                        json={
+                            "model": "gpt-4o",
+                            "messages": gpt_messages,
+                            "max_tokens": 1000
+                        },
+                        timeout=90.0
+                    )
+                    
+                    print(f"📸 GPT-4o response: {openai_response.status_code}")
+                    
+                    if openai_response.status_code == 200:
+                        openai_data = openai_response.json()
+                        
+                        if openai_data.get("error"):
+                            raise Exception(f"OpenAI Error: {openai_data['error'].get('message', 'Unknown')}")
+                        
+                        if openai_data.get("choices"):
+                            result_text = openai_data["choices"][0]["message"]["content"]
+                            print(f"📸 GPT-4o raw response: {result_text[:300]}...")
+                            
+                            try:
+                                grievance_json = json.loads(result_text.replace('```json', '').replace('```', '').strip())
+                                extracted_text = grievance_json.get("extracted_text", "")
+                                image_description = grievance_json.get("issue_summary", "")
+                                message = image_description or extracted_text[:200] or voice_transcript or message
+                                
+                                # Store media URL with grievance
+                                if stored_image_url:
+                                    extracted_text = json.dumps({**grievance_json, "media_url": stored_image_url})
+                                elif stored_audio_url:
+                                    extracted_text = json.dumps({**grievance_json, "media_url": stored_audio_url})
+                                
+                                print(f"✅ GPT-4o result: {message[:100]}...")
+                            except json.JSONDecodeError as je:
+                                print(f"⚠️ JSON parse error: {je}")
+                                message = result_text[:200] if result_text else (voice_transcript or message)
+                    else:
+                        error_text = openai_response.text[:500]
+                        print(f"❌ GPT-4o API error: {error_text}")
+                        
+            except Exception as e:
+                print(f"❌ Media processing error: {e}")
+                import traceback
+                traceback.print_exc()
+                
+                if is_audio:
+                    return "🎤 I received your voice message but encountered an error processing it. Please try:\n• Recording again with clear audio\n• Speaking closer to the microphone\n• Or typing your grievance instead"
+                else:
+                    return "📸 I received your image but encountered an error processing it. Please try:\n• Sending a clearer image\n• Or describing the issue in text"
                             
                     elif is_image:
                         # STEP 2: Process Image via GPT-4o Vision
