@@ -10,18 +10,111 @@ import tempfile
 import json
 import base64
 import httpx
+import random
+import string
 from datetime import datetime, timezone
 from emergentintegrations.llm.chat import LlmChat, UserMessage, FileContentWithMimeType
 
 router = APIRouter()
 
+# Configuration
 TWILIO_ACCOUNT_SID = os.environ.get('TWILIO_ACCOUNT_SID')
 TWILIO_AUTH_TOKEN = os.environ.get('TWILIO_AUTH_TOKEN')
 TWILIO_WHATSAPP_NUMBER = os.environ.get('TWILIO_WHATSAPP_NUMBER')
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')
 SARVAM_API_KEY = os.environ.get('SARVAM_API_KEY')
 
+# Supabase Storage Configuration
+SUPABASE_URL = os.environ.get('SUPABASE_URL')
+SUPABASE_SERVICE_KEY = os.environ.get('SUPABASE_SERVICE_KEY')
+STORAGE_BUCKET = os.environ.get('STORAGE_BUCKET', 'Grievances')
+
 twilio_client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+
+
+# ============================================================
+# HELPER: Download media from Twilio with redirect handling
+# ============================================================
+async def download_twilio_media(url: str, client: httpx.AsyncClient) -> dict:
+    """
+    Securely downloads media from Twilio.
+    Handles Twilio -> S3 redirects properly.
+    """
+    if not url:
+        return None
+    
+    auth = (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+    
+    print(f"[DEBUG] Initiating Twilio download from: {url[:50]}...")
+    
+    # First request - may redirect to S3
+    response = await client.get(url, auth=auth, follow_redirects=False)
+    
+    # Handle Twilio -> S3 Redirects
+    if response.status_code >= 300 and response.status_code < 400:
+        redirect_url = response.headers.get('location')
+        print(f"[DEBUG] Following redirect to S3...")
+        # Fetch from S3 WITHOUT Twilio auth headers
+        response = await client.get(redirect_url)
+    
+    if response.status_code != 200:
+        raise Exception(f"Twilio Download Failed: {response.status_code} {response.reason_phrase}")
+    
+    buffer = response.content
+    
+    if len(buffer) == 0:
+        raise Exception("Downloaded buffer is empty")
+    
+    content_type = response.headers.get('content-type', 'application/octet-stream')
+    
+    print(f"[DEBUG] Downloaded {len(buffer)} bytes, type: {content_type}")
+    return {'buffer': buffer, 'content_type': content_type}
+
+
+# ============================================================
+# HELPER: Upload to Supabase Storage
+# ============================================================
+async def upload_to_supabase_storage(file_obj: dict, folder: str, client: httpx.AsyncClient) -> str:
+    """
+    Uploads buffer to Supabase Storage via REST API.
+    Returns the public URL.
+    """
+    # Generate unique filename
+    random_suffix = ''.join(random.choices(string.ascii_lowercase + string.digits, k=7))
+    extension = file_obj['content_type'].split('/')[-1].split(';')[0]
+    if extension == 'mpeg':
+        extension = 'mp3'
+    elif extension == 'ogg':
+        extension = 'ogg'
+    
+    file_name = f"{folder}/{int(datetime.now().timestamp())}_{random_suffix}.{extension}"
+    
+    # Upload to Supabase Storage
+    upload_url = f"{SUPABASE_URL}/storage/v1/object/{STORAGE_BUCKET}/{file_name}"
+    
+    print(f"[DEBUG] Uploading to Supabase: {upload_url}")
+    
+    upload_response = await client.post(
+        upload_url,
+        headers={
+            'Authorization': f'Bearer {SUPABASE_SERVICE_KEY}',
+            'Content-Type': file_obj['content_type']
+        },
+        content=file_obj['buffer'],
+        timeout=60.0
+    )
+    
+    if upload_response.status_code not in [200, 201]:
+        error_text = upload_response.text
+        print(f"[DEBUG] Supabase upload error: {error_text}")
+        raise Exception(f"Supabase Upload Failed: {error_text}")
+    
+    # Get public URL
+    public_url = f"{SUPABASE_URL}/storage/v1/object/public/{STORAGE_BUCKET}/{file_name}"
+    
+    print(f"[DEBUG] File stored at: {public_url}")
+    return public_url
+
 
 class WhatsAppMessage(BaseModel):
     to: str
