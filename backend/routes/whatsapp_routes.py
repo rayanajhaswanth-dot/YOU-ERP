@@ -347,10 +347,10 @@ async def process_whatsapp_message(
                         print(f"⚠️ [STAGE: {current_stage}] Storage upload failed (continuing): {storage_err}")
                         # Continue processing even if storage fails
                     
-                    # STEP 3: Process Audio via Sarvam (using buffer directly)
+                    # STEP 3: Process Audio - OpenAI Whisper (Primary) with Sarvam fallback
                     if is_audio:
-                        current_stage = "SARVAM_AI_PROCESSING"
-                        print(f"[STAGE: {current_stage}] Step 3: Sarvam Processing...")
+                        current_stage = "AUDIO_TRANSCRIPTION"
+                        print(f"[STAGE: {current_stage}] Step 3: Audio Transcription...")
                         try:
                             # Determine file type
                             content_type = media_obj['content_type']
@@ -366,83 +366,97 @@ async def process_whatsapp_message(
                             elif 'amr' in content_type:
                                 filename = 'input.amr'
                                 file_mime = 'audio/amr'
+                            elif 'm4a' in content_type:
+                                filename = 'input.m4a'
+                                file_mime = 'audio/m4a'
                             else:
                                 filename = 'input.ogg'
                                 file_mime = 'audio/ogg'
                             
-                            print(f"[STAGE: {current_stage}] Audio file: {filename}, mime: {file_mime}, size: {len(media_obj['buffer'])} bytes")
+                            audio_size = len(media_obj['buffer'])
+                            print(f"[STAGE: {current_stage}] Audio file: {filename}, mime: {file_mime}, size: {audio_size} bytes")
                             
-                            # Upload to Sarvam using buffer (most reliable)
-                            files = {'file': (filename, media_obj['buffer'], file_mime)}
-                            data = {'model': 'saaras:v2.5'}  # Updated from deprecated v1
-                            
-                            sarvam_response = await client.post(
-                                "https://api.sarvam.ai/speech-to-text-translate",
-                                headers={"api-subscription-key": SARVAM_API_KEY},
-                                files=files,
-                                data=data,
-                                timeout=90.0
-                            )
-                            
-                            print(f"[STAGE: {current_stage}] Sarvam response status: {sarvam_response.status_code}")
-                            
-                            if sarvam_response.status_code == 200:
-                                sarvam_data = sarvam_response.json()
-                                voice_transcript = sarvam_data.get("transcript") or sarvam_data.get("text", "")
-                                language_code = sarvam_data.get("language_code", "unknown")
+                            # PRIMARY: Use OpenAI Whisper via emergentintegrations
+                            # Whisper supports all Indian languages and handles longer audio (up to 25MB)
+                            print(f"[STAGE: {current_stage}] Using OpenAI Whisper (primary)...")
+                            try:
+                                from emergentintegrations.llm.openai import OpenAISpeechToText
                                 
-                                lang_map = {
-                                    "hi-IN": "Hindi", "ta-IN": "Tamil", "te-IN": "Telugu",
-                                    "kn-IN": "Kannada", "ml-IN": "Malayalam", "bn-IN": "Bengali",
-                                    "mr-IN": "Marathi", "gu-IN": "Gujarati", "pa-IN": "Punjabi",
-                                    "en-IN": "English"
-                                }
-                                detected_lang = lang_map.get(language_code, language_code)
-                                voice_transcription = f"[Voice in {detected_lang}] {voice_transcript}"
-                                message = voice_transcript or message
-                                print(f"✅ Sarvam transcribed ({detected_lang}): {voice_transcript[:100]}...")
-                            else:
-                                error_text = sarvam_response.text[:500]
-                                print(f"⚠️ Sarvam error {sarvam_response.status_code}: {error_text}")
+                                # Save audio to temp file
+                                temp_audio_path = f"/tmp/whisper_{uuid.uuid4()}{filename[filename.rfind('.'):]}"
+                                with open(temp_audio_path, 'wb') as f:
+                                    f.write(media_obj['buffer'])
                                 
-                                # Fallback: Try OpenAI Whisper via emergentintegrations
-                                print(f"[STAGE: {current_stage}] Trying OpenAI Whisper fallback...")
+                                # Initialize Whisper STT
+                                stt = OpenAISpeechToText(api_key=EMERGENT_LLM_KEY)
+                                
+                                # Transcribe with Whisper
+                                with open(temp_audio_path, 'rb') as audio_file:
+                                    whisper_response = await stt.transcribe(
+                                        file=audio_file,
+                                        model="whisper-1",
+                                        response_format="json"
+                                    )
+                                
+                                voice_transcript = whisper_response.text if hasattr(whisper_response, 'text') else str(whisper_response)
+                                
+                                if voice_transcript:
+                                    message = voice_transcript
+                                    voice_transcription = f"[Voice transcribed by Whisper] {voice_transcript}"
+                                    print(f"✅ Whisper transcribed: {voice_transcript[:100]}...")
+                                else:
+                                    raise Exception("Whisper returned empty transcript")
+                                
+                                # Cleanup temp file
                                 try:
                                     import os
-                                    temp_audio_path = f"/tmp/audio_{uuid.uuid4()}.ogg"
-                                    with open(temp_audio_path, 'wb') as f:
-                                        f.write(media_obj['buffer'])
+                                    os.remove(temp_audio_path)
+                                except:
+                                    pass
                                     
-                                    # Use httpx to call OpenAI Whisper API
-                                    whisper_files = {
-                                        'file': (filename, open(temp_audio_path, 'rb'), file_mime),
-                                        'model': (None, 'whisper-1')
-                                    }
-                                    whisper_response = await client.post(
-                                        "https://api.openai.com/v1/audio/transcriptions",
-                                        headers={"Authorization": f"Bearer {EMERGENT_LLM_KEY}"},
-                                        files=whisper_files,
+                            except Exception as whisper_err:
+                                print(f"⚠️ Whisper failed: {whisper_err}")
+                                
+                                # FALLBACK: Try Sarvam AI (for short audio < 30s, good for Indian languages)
+                                print(f"[STAGE: {current_stage}] Trying Sarvam AI fallback...")
+                                try:
+                                    files = {'file': (filename, media_obj['buffer'], file_mime)}
+                                    data = {'model': 'saaras:v2.5'}
+                                    
+                                    sarvam_response = await client.post(
+                                        "https://api.sarvam.ai/speech-to-text-translate",
+                                        headers={"api-subscription-key": SARVAM_API_KEY},
+                                        files=files,
+                                        data=data,
                                         timeout=90.0
                                     )
                                     
-                                    if whisper_response.status_code == 200:
-                                        whisper_data = whisper_response.json()
-                                        voice_transcript = whisper_data.get("text", "")
+                                    print(f"[STAGE: {current_stage}] Sarvam response: {sarvam_response.status_code}")
+                                    
+                                    if sarvam_response.status_code == 200:
+                                        sarvam_data = sarvam_response.json()
+                                        voice_transcript = sarvam_data.get("transcript") or sarvam_data.get("text", "")
+                                        language_code = sarvam_data.get("language_code", "unknown")
+                                        
+                                        lang_map = {
+                                            "hi-IN": "Hindi", "ta-IN": "Tamil", "te-IN": "Telugu",
+                                            "kn-IN": "Kannada", "ml-IN": "Malayalam", "bn-IN": "Bengali",
+                                            "mr-IN": "Marathi", "gu-IN": "Gujarati", "pa-IN": "Punjabi",
+                                            "en-IN": "English"
+                                        }
+                                        detected_lang = lang_map.get(language_code, language_code)
+                                        voice_transcription = f"[Voice in {detected_lang}] {voice_transcript}"
                                         message = voice_transcript or message
-                                        print(f"✅ Whisper transcribed: {voice_transcript[:100]}...")
+                                        print(f"✅ Sarvam transcribed ({detected_lang}): {voice_transcript[:100]}...")
                                     else:
-                                        print(f"⚠️ Whisper also failed: {whisper_response.status_code}")
+                                        error_text = sarvam_response.text[:300]
+                                        print(f"⚠️ Sarvam also failed {sarvam_response.status_code}: {error_text}")
+                                        
+                                except Exception as sarvam_err:
+                                    print(f"⚠️ Sarvam fallback failed: {sarvam_err}")
                                     
-                                    # Cleanup
-                                    try:
-                                        os.remove(temp_audio_path)
-                                    except:
-                                        pass
-                                except Exception as whisper_err:
-                                    print(f"⚠️ Whisper fallback failed: {whisper_err}")
-                                    
-                        except Exception as sarvam_err:
-                            print(f"⚠️ [STAGE: {current_stage}] Sarvam skipped: {sarvam_err}")
+                        except Exception as audio_err:
+                            print(f"⚠️ [STAGE: {current_stage}] Audio transcription failed: {audio_err}")
                     
                     # STEP 4: GPT-4o Analysis
                     current_stage = "GPT4o_ANALYSIS"
