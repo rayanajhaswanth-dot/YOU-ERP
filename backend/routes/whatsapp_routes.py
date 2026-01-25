@@ -45,20 +45,27 @@ async def download_twilio_media(url: str, client: httpx.AsyncClient) -> dict:
     
     auth = (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
     
-    print(f"[DEBUG] Initiating Twilio download from: {url[:50]}...")
+    print(f"[STAGE: TWILIO_DOWNLOAD] Initiating download from: {url[:60]}...")
+    print(f"[STAGE: TWILIO_DOWNLOAD] Using SID: {TWILIO_ACCOUNT_SID[:10]}...")
     
     # First request - may redirect to S3
     response = await client.get(url, auth=auth, follow_redirects=False)
     
+    print(f"[STAGE: TWILIO_DOWNLOAD] Initial response: {response.status_code}")
+    
     # Handle Twilio -> S3 Redirects
     if response.status_code >= 300 and response.status_code < 400:
         redirect_url = response.headers.get('location')
-        print(f"[DEBUG] Following redirect to S3...")
+        print(f"[STAGE: TWILIO_DOWNLOAD] Following redirect to S3...")
         # Fetch from S3 WITHOUT Twilio auth headers
         response = await client.get(redirect_url)
+        print(f"[STAGE: TWILIO_DOWNLOAD] S3 response: {response.status_code}")
+    
+    if response.status_code == 401:
+        raise Exception("Twilio Auth Failed: Check TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN in .env")
     
     if response.status_code != 200:
-        raise Exception(f"Twilio Download Failed: {response.status_code} {response.reason_phrase}")
+        raise Exception(f"Twilio Download Failed: HTTP {response.status_code}")
     
     buffer = response.content
     
@@ -67,7 +74,12 @@ async def download_twilio_media(url: str, client: httpx.AsyncClient) -> dict:
     
     content_type = response.headers.get('content-type', 'application/octet-stream')
     
-    print(f"[DEBUG] Downloaded {len(buffer)} bytes, type: {content_type}")
+    # Check for XML error response
+    if 'xml' in content_type.lower():
+        text = buffer.decode('utf-8', errors='ignore')[:200]
+        raise Exception(f"Twilio returned XML error: {text}")
+    
+    print(f"[STAGE: TWILIO_DOWNLOAD] SUCCESS - {len(buffer)} bytes, type: {content_type}")
     return {'buffer': buffer, 'content_type': content_type}
 
 
