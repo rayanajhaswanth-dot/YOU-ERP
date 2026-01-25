@@ -267,8 +267,8 @@ SCHEMA:
                             message = voice_transcript or message
                             
                     elif is_image:
-                        # STEP 2: Process Image via Gemini Vision
-                        print(f"📸 Step 2: Processing Image via Gemini Vision...")
+                        # STEP 2: Process Image via GPT-4o Vision
+                        print(f"📸 Step 2: Processing Image via GPT-4o Vision...")
                         image_buffer = media_buffer
                         
                         # Determine MIME type
@@ -276,11 +276,16 @@ SCHEMA:
                             mime_type = 'image/jpeg'
                         elif 'png' in media_content_type:
                             mime_type = 'image/png'
+                        elif 'webp' in media_content_type:
+                            mime_type = 'image/webp'
+                        elif 'gif' in media_content_type:
+                            mime_type = 'image/gif'
                         else:
                             mime_type = 'image/jpeg'
                         
-                        # Encode image as base64
+                        # Encode image as base64 with data URL prefix for OpenAI
                         image_base64 = base64.b64encode(image_buffer).decode('utf-8')
+                        image_data_url = f"data:{mime_type};base64,{image_base64}"
                         
                         prompt_text = """TASK: You are a Legislative Assistant for the 'YOU' Governance Platform.
 INPUT: An image of a physical letter or grievance document.
@@ -301,46 +306,65 @@ SCHEMA:
   "resolution_suggestion": "one sentence action for the OSD"
 }"""
                         
-                        gemini_payload = {
-                            "contents": [{
-                                "parts": [
-                                    {"inlineData": {"mimeType": mime_type, "data": image_base64}},
-                                    {"text": prompt_text}
-                                ]
-                            }],
-                            "generationConfig": {"responseMimeType": "application/json"}
+                        # OpenAI GPT-4o Vision API payload
+                        openai_payload = {
+                            "model": "gpt-4o",
+                            "messages": [
+                                {
+                                    "role": "user",
+                                    "content": [
+                                        {
+                                            "type": "text",
+                                            "text": prompt_text
+                                        },
+                                        {
+                                            "type": "image_url",
+                                            "image_url": {
+                                                "url": image_data_url,
+                                                "detail": "high"
+                                            }
+                                        }
+                                    ]
+                                }
+                            ],
+                            "max_tokens": 1000
                         }
                         
-                        print(f"📤 Sending image ({len(image_base64)} chars base64) to Gemini...")
+                        print(f"📤 Sending image ({len(image_base64)} chars base64) to GPT-4o...")
                         
-                        gemini_response = await client.post(
-                            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={EMERGENT_LLM_KEY}",
-                            json=gemini_payload,
+                        gpt4o_response = await client.post(
+                            "https://api.openai.com/v1/chat/completions",
+                            headers={
+                                "Authorization": f"Bearer {EMERGENT_LLM_KEY}",
+                                "Content-Type": "application/json"
+                            },
+                            json=openai_payload,
                             timeout=90.0  # Extended timeout for image processing
                         )
                         
-                        print(f"📸 Gemini response: {gemini_response.status_code}")
+                        print(f"📸 GPT-4o response: {gpt4o_response.status_code}")
                         
-                        if gemini_response.status_code == 200:
-                            gemini_data = gemini_response.json()
+                        if gpt4o_response.status_code == 200:
+                            gpt4o_data = gpt4o_response.json()
                             
-                            if gemini_data.get("error"):
-                                raise Exception(f"Gemini Error: {gemini_data['error'].get('message', 'Unknown')}")
+                            if gpt4o_data.get("error"):
+                                raise Exception(f"GPT-4o Error: {gpt4o_data['error'].get('message', 'Unknown')}")
                             
-                            if gemini_data.get("candidates"):
-                                result_text = gemini_data["candidates"][0]["content"]["parts"][0]["text"]
+                            if gpt4o_data.get("choices"):
+                                result_text = gpt4o_data["choices"][0]["message"]["content"]
+                                print(f"📸 GPT-4o raw response: {result_text[:300]}...")
                                 try:
                                     grievance_json = json.loads(result_text.replace('```json', '').replace('```', '').strip())
                                     extracted_text = grievance_json.get("extracted_text", "")
                                     image_description = grievance_json.get("issue_summary", "")
                                     message = image_description or extracted_text[:200] or message
-                                    print(f"✅ Gemini OCR result: {message[:100]}...")
+                                    print(f"✅ GPT-4o OCR result: {message[:100]}...")
                                 except json.JSONDecodeError as je:
                                     print(f"⚠️ JSON parse error: {je}")
                                     message = result_text[:200] if result_text else message
                         else:
-                            error_text = gemini_response.text[:500]
-                            print(f"❌ Gemini API error: {error_text}")
+                            error_text = gpt4o_response.text[:500]
+                            print(f"❌ GPT-4o API error: {error_text}")
                             return "📸 I received your image but encountered an error processing it. Please try:\n• Sending a clearer image\n• Or describing the issue in text"
                             
             except Exception as e:
