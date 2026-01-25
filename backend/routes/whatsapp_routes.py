@@ -452,15 +452,15 @@ Return JSON ONLY (no markdown, no code blocks): {
                         if is_image and media_obj:
                             # Encode image as base64
                             image_base64 = base64.b64encode(media_obj['buffer']).decode('utf-8')
-                            mime_type = media_obj['content_type']
                             
-                            print(f"[STAGE: {current_stage}] Using FileContent with base64 ({len(image_base64)} chars)")
+                            # IMPORTANT: Use content_type="image" (not mime type) for the library to handle images correctly
+                            print(f"[STAGE: {current_stage}] Using FileContent with content_type='image' ({len(image_base64)} chars)")
                             
                             vision_message = UserMessage(
                                 text=vision_prompt,
                                 file_contents=[
                                     FileContent(
-                                        content_type=mime_type,
+                                        content_type="image",  # Must be "image" not "image/jpeg"
                                         file_content_base64=image_base64
                                     )
                                 ]
