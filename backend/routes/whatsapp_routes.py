@@ -354,9 +354,17 @@ async def process_whatsapp_message(
                             elif 'mp3' in content_type or 'mpeg' in content_type:
                                 filename = 'input.mp3'
                                 file_mime = 'audio/mpeg'
+                            elif 'wav' in content_type:
+                                filename = 'input.wav'
+                                file_mime = 'audio/wav'
+                            elif 'amr' in content_type:
+                                filename = 'input.amr'
+                                file_mime = 'audio/amr'
                             else:
                                 filename = 'input.ogg'
                                 file_mime = 'audio/ogg'
+                            
+                            print(f"[STAGE: {current_stage}] Audio file: {filename}, mime: {file_mime}, size: {len(media_obj['buffer'])} bytes")
                             
                             # Upload to Sarvam using buffer (most reliable)
                             files = {'file': (filename, media_obj['buffer'], file_mime)}
@@ -369,6 +377,8 @@ async def process_whatsapp_message(
                                 data=data,
                                 timeout=90.0
                             )
+                            
+                            print(f"[STAGE: {current_stage}] Sarvam response status: {sarvam_response.status_code}")
                             
                             if sarvam_response.status_code == 200:
                                 sarvam_data = sarvam_response.json()
@@ -386,7 +396,45 @@ async def process_whatsapp_message(
                                 message = voice_transcript or message
                                 print(f"✅ Sarvam transcribed ({detected_lang}): {voice_transcript[:100]}...")
                             else:
-                                print(f"⚠️ Sarvam error: {sarvam_response.status_code}")
+                                error_text = sarvam_response.text[:500]
+                                print(f"⚠️ Sarvam error {sarvam_response.status_code}: {error_text}")
+                                
+                                # Fallback: Try OpenAI Whisper via emergentintegrations
+                                print(f"[STAGE: {current_stage}] Trying OpenAI Whisper fallback...")
+                                try:
+                                    import os
+                                    temp_audio_path = f"/tmp/audio_{uuid.uuid4()}.ogg"
+                                    with open(temp_audio_path, 'wb') as f:
+                                        f.write(media_obj['buffer'])
+                                    
+                                    # Use httpx to call OpenAI Whisper API
+                                    whisper_files = {
+                                        'file': (filename, open(temp_audio_path, 'rb'), file_mime),
+                                        'model': (None, 'whisper-1')
+                                    }
+                                    whisper_response = await client.post(
+                                        "https://api.openai.com/v1/audio/transcriptions",
+                                        headers={"Authorization": f"Bearer {EMERGENT_LLM_KEY}"},
+                                        files=whisper_files,
+                                        timeout=90.0
+                                    )
+                                    
+                                    if whisper_response.status_code == 200:
+                                        whisper_data = whisper_response.json()
+                                        voice_transcript = whisper_data.get("text", "")
+                                        message = voice_transcript or message
+                                        print(f"✅ Whisper transcribed: {voice_transcript[:100]}...")
+                                    else:
+                                        print(f"⚠️ Whisper also failed: {whisper_response.status_code}")
+                                    
+                                    # Cleanup
+                                    try:
+                                        os.remove(temp_audio_path)
+                                    except:
+                                        pass
+                                except Exception as whisper_err:
+                                    print(f"⚠️ Whisper fallback failed: {whisper_err}")
+                                    
                         except Exception as sarvam_err:
                             print(f"⚠️ [STAGE: {current_stage}] Sarvam skipped: {sarvam_err}")
                     
