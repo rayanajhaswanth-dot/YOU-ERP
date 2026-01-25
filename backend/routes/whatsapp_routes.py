@@ -285,19 +285,18 @@ async def process_whatsapp_message(
         print(f"📊 Media detection: is_image={is_image}, is_audio={is_audio}, content_type={media_content_type}")
         
         # ============================================================
-        # MULTIMODAL ORCHESTRATOR V9 - Storage Integration
-        # 1. Downloads media from Twilio with redirect handling
-        # 2. Uploads to Supabase Storage for persistence
-        # 3. Uses storage URL for GPT-4o (lighter payload)
-        # 4. Uses direct buffer for Sarvam (most reliable)
+        # MULTIMODAL ORCHESTRATOR V12 - Self-Diagnostic Mode
+        # Tracks currentStage for precise error diagnosis
         # ============================================================
         
         stored_image_url = None
         stored_audio_url = None
+        current_stage = "INITIALIZATION"
         
         if media_url and (is_audio or is_image):
             try:
                 async with httpx.AsyncClient(timeout=120.0) as client:
+                    current_stage = "TWILIO_DOWNLOAD"
                     # STEP 1: Download from Twilio with redirect handling
                     print(f"[DEBUG] Step 1: Downloading from Twilio...")
                     media_obj = await download_twilio_media(media_url, client)
