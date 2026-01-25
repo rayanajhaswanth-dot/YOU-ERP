@@ -298,26 +298,28 @@ async def process_whatsapp_message(
                 async with httpx.AsyncClient(timeout=120.0) as client:
                     current_stage = "TWILIO_DOWNLOAD"
                     # STEP 1: Download from Twilio with redirect handling
-                    print(f"[DEBUG] Step 1: Downloading from Twilio...")
+                    print(f"[STAGE: {current_stage}] Step 1: Downloading from Twilio...")
                     media_obj = await download_twilio_media(media_url, client)
                     
                     if not media_obj:
                         raise Exception("Failed to download media from Twilio")
                     
                     # STEP 2: Persist to Supabase Storage
-                    print(f"[DEBUG] Step 2: Persisting to Storage Bucket...")
+                    current_stage = "SUPABASE_UPLOAD"
+                    print(f"[STAGE: {current_stage}] Step 2: Persisting to Storage Bucket...")
                     try:
                         if is_audio:
                             stored_audio_url = await upload_to_supabase_storage(media_obj, 'audio', client)
                         elif is_image:
                             stored_image_url = await upload_to_supabase_storage(media_obj, 'images', client)
                     except Exception as storage_err:
-                        print(f"⚠️ Storage upload failed (continuing): {storage_err}")
+                        print(f"⚠️ [STAGE: {current_stage}] Storage upload failed (continuing): {storage_err}")
                         # Continue processing even if storage fails
                     
                     # STEP 3: Process Audio via Sarvam (using buffer directly)
                     if is_audio:
-                        print(f"[DEBUG] Step 3: Sarvam Processing...")
+                        current_stage = "SARVAM_AI_PROCESSING"
+                        print(f"[STAGE: {current_stage}] Step 3: Sarvam Processing...")
                         try:
                             # Determine file type
                             content_type = media_obj['content_type']
