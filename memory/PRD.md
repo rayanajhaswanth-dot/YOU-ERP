@@ -43,15 +43,15 @@ Build "YOU - Governance ERP & Workflow Automation for Legislators," a production
 ### 4. WhatsApp Bot ✅
 - Twilio integration for receiving grievances
 - Text message processing with AI analysis
+- **Interactive Chatbot** - Detects intent (Query/Grievance/Followup/Thanks)
 - **Multimodal Orchestrator V6** [UPDATED - Jan 24, 2026]
   - **Voice transcription** using **Sarvam AI** (`saaras:v1` model)
     - Specialized for Indian regional dialects
     - Supports Hindi, Tamil, Telugu, Kannada, Malayalam, Bengali, Marathi, Gujarati, Punjabi
     - Handles code-switching (Hinglish/Telugish)
-    - Multipart form-data upload
-  - **Image OCR** using **Gemini 2.0 Flash** direct API
-    - Inline base64 image encoding
-    - Structured JSON response
+  - **Image OCR** using **GPT-4o Vision** (OpenAI API)
+    - High detail image analysis
+    - Structured JSON response with OCR text extraction
   - Extended timeouts (120s for download, 90s for AI processing)
 - Auto-priority assignment
 
