@@ -72,12 +72,12 @@ async def download_twilio_media(url: str, client: httpx.AsyncClient) -> dict:
 
 
 # ============================================================
-# HELPER: Upload to Supabase Storage
+# HELPER: Upload to Supabase Storage & Generate Signed URL
 # ============================================================
 async def upload_to_supabase_storage(file_obj: dict, folder: str, client: httpx.AsyncClient) -> str:
     """
     Uploads buffer to Supabase Storage via REST API.
-    Returns the public URL.
+    Returns a SIGNED URL (valid for 60 seconds) for private bucket compatibility.
     """
     # Generate unique filename
     random_suffix = ''.join(random.choices(string.ascii_lowercase + string.digits, k=7))
@@ -89,10 +89,10 @@ async def upload_to_supabase_storage(file_obj: dict, folder: str, client: httpx.
     
     file_name = f"{folder}/{int(datetime.now().timestamp())}_{random_suffix}.{extension}"
     
-    # Upload to Supabase Storage
+    # Step 1: Upload to Supabase Storage
     upload_url = f"{SUPABASE_URL}/storage/v1/object/{STORAGE_BUCKET}/{file_name}"
     
-    print(f"[DEBUG] Uploading to Supabase: {upload_url}")
+    print(f"[STAGE: SUPABASE_UPLOAD] Uploading to: {upload_url}")
     
     upload_response = await client.post(
         upload_url,
@@ -106,14 +106,40 @@ async def upload_to_supabase_storage(file_obj: dict, folder: str, client: httpx.
     
     if upload_response.status_code not in [200, 201]:
         error_text = upload_response.text
-        print(f"[DEBUG] Supabase upload error: {error_text}")
+        print(f"[STAGE: SUPABASE_UPLOAD] ERROR: {error_text}")
+        if "404" in error_text:
+            raise Exception(f"Bucket '{STORAGE_BUCKET}' not found. Create it in Supabase Dashboard.")
+        elif "401" in error_text or "403" in error_text:
+            raise Exception("Check SUPABASE_SERVICE_KEY - unauthorized access.")
         raise Exception(f"Supabase Upload Failed: {error_text}")
     
-    # Get public URL
-    public_url = f"{SUPABASE_URL}/storage/v1/object/public/{STORAGE_BUCKET}/{file_name}"
+    print(f"[STAGE: SUPABASE_UPLOAD] SUCCESS - File uploaded")
     
-    print(f"[DEBUG] File stored at: {public_url}")
-    return public_url
+    # Step 2: Generate Signed URL (valid for 300 seconds = 5 mins)
+    sign_url = f"{SUPABASE_URL}/storage/v1/object/sign/{STORAGE_BUCKET}/{file_name}"
+    
+    print(f"[STAGE: SIGNED_URL] Generating signed URL...")
+    
+    sign_response = await client.post(
+        sign_url,
+        headers={
+            'Authorization': f'Bearer {SUPABASE_SERVICE_KEY}',
+            'Content-Type': 'application/json'
+        },
+        json={"expiresIn": 300},
+        timeout=30.0
+    )
+    
+    if sign_response.status_code == 200:
+        sign_data = sign_response.json()
+        signed_url = f"{SUPABASE_URL}/storage/v1{sign_data.get('signedURL', '')}"
+        print(f"[STAGE: SIGNED_URL] SUCCESS: {signed_url[:80]}...")
+        return signed_url
+    else:
+        # Fallback to public URL if signing fails
+        public_url = f"{SUPABASE_URL}/storage/v1/object/public/{STORAGE_BUCKET}/{file_name}"
+        print(f"[STAGE: SIGNED_URL] Fallback to public URL: {public_url}")
+        return public_url
 
 
 class WhatsAppMessage(BaseModel):
