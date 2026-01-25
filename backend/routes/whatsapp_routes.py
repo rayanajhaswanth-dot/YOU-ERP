@@ -48,18 +48,43 @@ async def download_twilio_media(url: str, client: httpx.AsyncClient) -> dict:
     print(f"[STAGE: TWILIO_DOWNLOAD] Initiating download from: {url[:60]}...")
     print(f"[STAGE: TWILIO_DOWNLOAD] Using SID: {TWILIO_ACCOUNT_SID[:10]}...")
     
-    # First request - may redirect to S3
-    response = await client.get(url, auth=auth, follow_redirects=False)
+    # Method 1: Try with follow_redirects=True first (simpler approach)
+    try:
+        response = await client.get(url, auth=auth, follow_redirects=True, timeout=60.0)
+        print(f"[STAGE: TWILIO_DOWNLOAD] Direct response: {response.status_code}")
+        
+        if response.status_code == 200:
+            buffer = response.content
+            if len(buffer) > 0:
+                content_type = response.headers.get('content-type', 'application/octet-stream')
+                if 'xml' not in content_type.lower():
+                    print(f"[STAGE: TWILIO_DOWNLOAD] SUCCESS (direct) - {len(buffer)} bytes, type: {content_type}")
+                    return {'buffer': buffer, 'content_type': content_type}
+    except Exception as e:
+        print(f"[STAGE: TWILIO_DOWNLOAD] Direct method failed: {e}")
+    
+    # Method 2: Manual redirect handling (fallback)
+    print(f"[STAGE: TWILIO_DOWNLOAD] Trying manual redirect method...")
+    response = await client.get(url, auth=auth, follow_redirects=False, timeout=60.0)
     
     print(f"[STAGE: TWILIO_DOWNLOAD] Initial response: {response.status_code}")
     
-    # Handle Twilio -> S3 Redirects
+    # Handle Twilio -> S3 Redirects (3xx responses)
     if response.status_code >= 300 and response.status_code < 400:
         redirect_url = response.headers.get('location')
-        print(f"[STAGE: TWILIO_DOWNLOAD] Following redirect to S3...")
+        print(f"[STAGE: TWILIO_DOWNLOAD] Following redirect to S3: {redirect_url[:60] if redirect_url else 'None'}...")
         # Fetch from S3 WITHOUT Twilio auth headers
-        response = await client.get(redirect_url)
+        response = await client.get(redirect_url, timeout=60.0)
         print(f"[STAGE: TWILIO_DOWNLOAD] S3 response: {response.status_code}")
+    
+    # Method 3: If 404, try adding .json extension or different URL format
+    if response.status_code == 404:
+        print(f"[STAGE: TWILIO_DOWNLOAD] Got 404, trying alternative URL formats...")
+        # Sometimes Twilio needs the media to be fetched differently
+        # Try with explicit accept header
+        headers = {'Accept': '*/*'}
+        response = await client.get(url, auth=auth, headers=headers, follow_redirects=True, timeout=60.0)
+        print(f"[STAGE: TWILIO_DOWNLOAD] With Accept header: {response.status_code}")
     
     if response.status_code == 401:
         raise Exception("Twilio Auth Failed: Check TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN in .env")
