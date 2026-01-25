@@ -420,52 +420,76 @@ Return JSON: {
                                 "image_url": {"url": data_url, "detail": "high"}
                             })
                     
-                    # Call GPT-4o
-                    openai_response = await client.post(
-                        "https://api.openai.com/v1/chat/completions",
-                        headers={
-                            "Authorization": f"Bearer {EMERGENT_LLM_KEY}",
-                            "Content-Type": "application/json"
-                        },
-                        json={
-                            "model": "gpt-4o",
-                            "messages": gpt_messages,
-                            "max_tokens": 1000
-                        },
-                        timeout=90.0
-                    )
-                    
-                    print(f"📸 GPT-4o response: {openai_response.status_code}")
-                    
-                    if openai_response.status_code == 200:
-                        openai_data = openai_response.json()
+                    # Call GPT-4o Vision using emergentintegrations library
+                    try:
+                        from emergentintegrations.llm.chat import LlmChat, UserMessage, FileContentWithMimeType
                         
-                        if openai_data.get("error"):
-                            raise Exception(f"OpenAI Error: {openai_data['error'].get('message', 'Unknown')}")
+                        vision_chat = LlmChat(
+                            api_key=EMERGENT_LLM_KEY,
+                            session_id=f"vision-{uuid.uuid4()}",
+                            system_message="You are a Legislative Assistant for the 'YOU' Governance Platform. Extract grievance details from images and return valid JSON only."
+                        ).with_model("openai", "gpt-4o")
                         
-                        if openai_data.get("choices"):
-                            result_text = openai_data["choices"][0]["message"]["content"]
-                            print(f"📸 GPT-4o raw response: {result_text[:300]}...")
+                        # Build prompt based on available data
+                        if is_image and voice_transcript:
+                            vision_prompt = f"TASK: Merge details from this letter image and voice transcript: \"{voice_transcript}\"."
+                        elif is_image:
+                            vision_prompt = "TASK: OCR this physical letter or grievance image. Extract all text and identify the issue."
+                        else:
+                            vision_prompt = f"TASK: Extract grievance details from voice transcript: \"{voice_transcript}\"."
+                        
+                        vision_prompt += """
+Return JSON ONLY (no markdown, no code blocks): { 
+    "constituent_name": "name if found, else 'Anonymous Citizen'", 
+    "ward_number": "ward/village if found, else 'Not specified'", 
+    "issue_summary": "brief summary of the grievance", 
+    "extracted_text": "full OCR text if image",
+    "ai_priority": 1-10 based on urgency, 
+    "category": "Infrastructure/Water/Electricity/Roads/Sanitation/Other"
+}"""
+                        
+                        # Create message with image if available
+                        if is_image and media_obj:
+                            # Use base64 for emergentintegrations
+                            image_base64 = base64.b64encode(media_obj['buffer']).decode('utf-8')
+                            mime_type = media_obj['content_type']
                             
-                            try:
-                                grievance_json = json.loads(result_text.replace('```json', '').replace('```', '').strip())
-                                extracted_text = grievance_json.get("extracted_text", "")
-                                image_description = grievance_json.get("issue_summary", "")
-                                message = image_description or extracted_text[:200] or voice_transcript or message
-                                
-                                # Store media URL with grievance
-                                if stored_image_url:
-                                    extracted_text = json.dumps({**grievance_json, "media_url": stored_image_url})
-                                elif stored_audio_url:
-                                    extracted_text = json.dumps({**grievance_json, "media_url": stored_audio_url})
-                                
-                                print(f"✅ GPT-4o result: {message[:100]}...")
-                            except json.JSONDecodeError as je:
-                                print(f"⚠️ JSON parse error: {je}")
-                                message = result_text[:200] if result_text else (voice_transcript or message)
-                    else:
-                        error_text = openai_response.text[:500]
-                        print(f"❌ GPT-4o API error: {error_text}")
+                            vision_message = UserMessage(
+                                text=vision_prompt,
+                                file_content=FileContentWithMimeType(
+                                    content=image_base64,
+                                    mime_type=mime_type
+                                )
+                            )
+                        else:
+                            vision_message = UserMessage(text=vision_prompt)
+                        
+                        print(f"[STAGE: {current_stage}] Calling GPT-4o via emergentintegrations...")
+                        result_text = await vision_chat.send_message(vision_message)
+                        print(f"📸 GPT-4o raw response: {result_text[:300]}...")
+                        
+                        try:
+                            grievance_json = json.loads(result_text.replace('```json', '').replace('```', '').strip())
+                            extracted_text = grievance_json.get("extracted_text", "")
+                            image_description = grievance_json.get("issue_summary", "")
+                            message = image_description or extracted_text[:200] or voice_transcript or message
+                            
+                            # Store media URL with grievance
+                            if stored_image_url:
+                                extracted_text = json.dumps({**grievance_json, "media_url": stored_image_url})
+                            elif stored_audio_url:
+                                extracted_text = json.dumps({**grievance_json, "media_url": stored_audio_url})
+                            
+                            print(f"✅ GPT-4o result: {message[:100]}...")
+                        except json.JSONDecodeError as je:
+                            print(f"⚠️ JSON parse error: {je}")
+                            message = result_text[:200] if result_text else (voice_transcript or message)
+                            
+                    except Exception as vision_err:
+                        print(f"❌ [STAGE: {current_stage}] GPT-4o Vision error: {vision_err}")
+                        # If we have voice transcript, use that as the message
+                        if voice_transcript:
+                            message = voice_transcript
                         
             except Exception as e:
                 error_msg = str(e)
