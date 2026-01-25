@@ -368,7 +368,7 @@ async def process_whatsapp_message(
                             
                             # Upload to Sarvam using buffer (most reliable)
                             files = {'file': (filename, media_obj['buffer'], file_mime)}
-                            data = {'model': 'saaras:v1'}
+                            data = {'model': 'saaras:v2.5'}  # Updated from deprecated v1
                             
                             sarvam_response = await client.post(
                                 "https://api.sarvam.ai/speech-to-text-translate",
