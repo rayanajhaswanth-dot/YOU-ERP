@@ -23,18 +23,26 @@ export default function HappinessReport({ user }) {
     try {
       const token = localStorage.getItem('token');
       
-      const overviewResponse = await axios.get(`${BACKEND_URL}/api/analytics/sentiment/overview`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setOverview(overviewResponse.data);
+      // These are legacy analytics endpoints - don't block if they fail
+      try {
+        const overviewResponse = await axios.get(`${BACKEND_URL}/api/analytics/sentiment/overview`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        setOverview(overviewResponse.data);
+      } catch (e) {
+        console.log('Overview analytics not available');
+      }
 
-      const sentimentResponse = await axios.get(`${BACKEND_URL}/api/analytics/sentiment?days=30`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setSentimentData(sentimentResponse.data);
+      try {
+        const sentimentResponse = await axios.get(`${BACKEND_URL}/api/analytics/sentiment?days=30`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        setSentimentData(sentimentResponse.data);
+      } catch (e) {
+        console.log('Sentiment analytics not available');
+      }
     } catch (error) {
       console.error('Error fetching analytics:', error);
-      toast.error('Failed to load analytics');
     } finally {
       setLoading(false);
     }
