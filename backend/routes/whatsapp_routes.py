@@ -814,7 +814,9 @@ Respond with JSON only (no markdown):
         transcription = voice_transcript or message
         analysis = analyze_grievance(transcription or "")
         
-        # Build grievance data with Reality Matrix fields
+        # Build grievance data - only include fields that exist in the database schema
+        # NOTE: priority_level, deadline_timestamp, media_url are calculated but NOT stored
+        # until the user updates their Supabase schema with these columns
         grievance_data = {
             'id': grievance_id,
             'politician_id': politician_id,
@@ -825,13 +827,6 @@ Respond with JSON only (no markdown):
             # AI-determined fields from Gemini intent detection
             'issue_type': category,
             'ai_priority': priority,
-            
-            # NEW FIELDS calculated by analyze_grievance (Reality Matrix)
-            'priority_level': analysis["priority_level"],
-            'deadline_timestamp': analysis["deadline_timestamp"],
-            
-            # Robustly handle media_url (only include if it exists in local scope)
-            'media_url': locals().get('stored_image_url') or locals().get('stored_audio_url'),
             
             'created_at': datetime.now(timezone.utc).isoformat()
         }
