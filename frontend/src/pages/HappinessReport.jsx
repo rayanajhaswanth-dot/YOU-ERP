@@ -20,32 +20,30 @@ export default function HappinessReport({ user }) {
   }, []);
 
   const fetchAnalytics = async () => {
+    const token = localStorage.getItem('token');
+    
+    // These are legacy analytics endpoints - use short timeout and don't block UI
+    const config = {
+      headers: { Authorization: `Bearer ${token}` },
+      timeout: 5000  // 5 second timeout
+    };
+    
     try {
-      const token = localStorage.getItem('token');
-      
-      // These are legacy analytics endpoints - don't block if they fail
-      try {
-        const overviewResponse = await axios.get(`${BACKEND_URL}/api/analytics/sentiment/overview`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        setOverview(overviewResponse.data);
-      } catch (e) {
-        console.log('Overview analytics not available');
-      }
-
-      try {
-        const sentimentResponse = await axios.get(`${BACKEND_URL}/api/analytics/sentiment?days=30`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        setSentimentData(sentimentResponse.data);
-      } catch (e) {
-        console.log('Sentiment analytics not available');
-      }
-    } catch (error) {
-      console.error('Error fetching analytics:', error);
-    } finally {
-      setLoading(false);
+      const overviewResponse = await axios.get(`${BACKEND_URL}/api/analytics/sentiment/overview`, config);
+      setOverview(overviewResponse.data);
+    } catch (e) {
+      console.log('Overview analytics not available:', e.message);
     }
+
+    try {
+      const sentimentResponse = await axios.get(`${BACKEND_URL}/api/analytics/sentiment?days=30`, config);
+      setSentimentData(sentimentResponse.data);
+    } catch (e) {
+      console.log('Sentiment analytics not available:', e.message);
+    }
+    
+    // Always finish loading regardless of API results
+    setLoading(false);
   };
 
   const formatIssueDistribution = () => {
