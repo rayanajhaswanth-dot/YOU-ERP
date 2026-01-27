@@ -13,7 +13,8 @@ const COLORS = ['#f97316', '#10b981', '#3b82f6', '#f59e0b', '#ec4899', '#8b5cf6'
 export default function HappinessReport({ user }) {
   const [overview, setOverview] = useState(null);
   const [sentimentData, setSentimentData] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);  // Start with false to render immediately
+  const [legacyLoading, setLegacyLoading] = useState(true);
 
   useEffect(() => {
     fetchAnalytics();
