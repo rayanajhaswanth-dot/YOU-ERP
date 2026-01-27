@@ -807,69 +807,86 @@ Respond with JSON only (no markdown):
         
         politician_id = politicians.data[0]['id']
         
-        grievance_id = str(uuid.uuid4())
-        
         # --- AI REALITY MATRIX: Analyze grievance for priority and deadline ---
-        # Use 'or ""' to ensure we pass a string even if transcription is None
         transcription = voice_transcript or message
         analysis = analyze_grievance(transcription or "")
         
-        # Build grievance data - only include fields that exist in the database schema
-        # NOTE: priority_level, deadline_timestamp, media_url are calculated but NOT stored
-        # until the user updates their Supabase schema with these columns
+        # Get media URL if available (from earlier processing)
+        current_media_url = None
+        if 'stored_image_url' in dir() and stored_image_url:
+            current_media_url = stored_image_url
+        elif 'stored_audio_url' in dir() and stored_audio_url:
+            current_media_url = stored_audio_url
+        
+        # Build grievance data with Reality Matrix fields explicitly mapped
         grievance_data = {
-            'id': grievance_id,
             'politician_id': politician_id,
-            'description': message,  # Raw text
+            'description': transcription,
             'status': 'PENDING',
-            'village': f'From {name} ({phone})',  # Placeholder (Location extraction is next phase)
+            'village': f'From {name} ({phone})',
+            
+            # FIX: Explicitly map the analysis keys (PRD Reality Matrix)
+            'priority_level': analysis.get("priority_level", "LOW"),
+            'deadline_timestamp': analysis.get("deadline_timestamp"),
+            'issue_type': analysis.get("issue_type", "Other"),
             
             # AI-determined fields from Gemini intent detection
-            'issue_type': category,
             'ai_priority': priority,
+            
+            # Media URL if available
+            'media_url': current_media_url,
             
             'created_at': datetime.now(timezone.utc).isoformat()
         }
         
-        supabase.table('grievances').insert(grievance_data).execute()
-        print(f"✅ Grievance created: {grievance_id} with Reality Matrix: {analysis['priority_level']}")
+        # 1. Insert and CAPTURE the response (to get the new Ticket ID)
+        ticket_id_short = "ERROR"
+        try:
+            insert_response = supabase.table('grievances').insert(grievance_data).execute()
+            if insert_response.data and len(insert_response.data) > 0:
+                new_ticket = insert_response.data[0]
+                ticket_id_short = str(new_ticket['id'])[:8].upper()
+                print(f"✅ Grievance created: {new_ticket['id']} | Priority: {analysis['priority_level']}")
+            else:
+                print(f"⚠️ Insert returned no data, using generated ID")
+                ticket_id_short = str(uuid.uuid4())[:8].upper()
+        except Exception as db_err:
+            print(f"❌ DB Insert Error: {db_err}")
+            # Fallback: generate a local ID for display
+            ticket_id_short = str(uuid.uuid4())[:8].upper()
         
-        # Use Reality Matrix priority level for display
-        priority_label = analysis["priority_level"]
+        # 2. Format the Deadline for the User (PRD Section 6)
+        priority_level = analysis.get("priority_level", "LOW")
+        deadline_timestamp = analysis.get("deadline_timestamp")
+        
+        if deadline_timestamp:
+            # Convert ISO string to readable format
+            try:
+                deadline_dt = datetime.fromisoformat(deadline_timestamp.replace('Z', '+00:00'))
+                deadline_msg = f"⏰ Deadline: {deadline_dt.strftime('%b %d, %Y %H:%M')}"
+            except:
+                deadline_msg = f"⏰ Priority: {priority_level}"
+        else:
+            deadline_msg = "📋 Status: Routine Queue"
         
         # Build media notes based on what was received
         media_note = ""
         if voice_transcription:
-            media_note = "\n🎤 Voice message transcribed"
+            media_note = "\n🎤 Voice transcribed"
         elif media_url and media_content_type and media_content_type.startswith('image/'):
-            media_note = "\n📸 Image received and analyzed"
+            media_note = "\n📸 Image analyzed"
         
-        ocr_note = ""
-        if extracted_text and len(extracted_text) > 10:
-            ocr_note = "\n\nExtracted Text:\n{}...".format(extracted_text[:150])
-        elif voice_transcription and len(voice_transcription) > 10:
-            ocr_note = "\n\nTranscribed:\n{}...".format(voice_transcription[:200])
+        # 3. Send the PRD-Compliant Reply
+        response_body = (
+            f"✅ Ticket #{ticket_id_short} Registered.\n\n"
+            f"📁 Category: {analysis['issue_type']}\n"
+            f"⚡ Priority: {priority_level}\n"
+            f"{deadline_msg}{media_note}\n\n"
+            f"Thank you for contacting the Leader's Office.\n"
+            f"You'll receive updates as we work on this."
+        )
         
-        # Format deadline for display
-        deadline_note = ""
-        if analysis["deadline_timestamp"]:
-            deadline_note = f"\n⏰ Expected Resolution: {analysis['deadline_timestamp'][:16].replace('T', ' ')}"
-        
-        response = """✅ Grievance Registered Successfully!
-
-📋 Summary: {}
-
-📁 Category: {}
-⚡ Priority: {} (AI Score: {}/10){}
-🔖 Reference ID: {}{}{}
-
-Your concern has been registered and will be reviewed by our team.
-
-You'll receive updates as we work on resolving this.
-
-🙏 Thank you for reaching out!""".format(summary, category, priority_label, priority, deadline_note, grievance_id[:8].upper(), media_note, ocr_note)
-        
-        return response
+        return response_body
         
     except Exception as e:
         print(f"❌ Processing error: {e}")
