@@ -7,7 +7,8 @@ ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
 supabase_url = os.environ.get('SUPABASE_URL')
-supabase_key = os.environ.get('SUPABASE_ANON_KEY')
+# Use SERVICE_KEY to bypass RLS policies for backend operations
+supabase_key = os.environ.get('SUPABASE_SERVICE_KEY') or os.environ.get('SUPABASE_ANON_KEY')
 
 supabase: Client = create_client(supabase_url, supabase_key)
 
