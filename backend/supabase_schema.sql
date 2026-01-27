@@ -73,16 +73,31 @@ CREATE TABLE IF NOT EXISTS posts (
     published_at TIMESTAMPTZ
 );
 
--- Sentiment analytics table
+-- Sentiment analytics table (Updated for Happiness Report aggregation)
 CREATE TABLE IF NOT EXISTS sentiment_analytics (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     politician_id UUID REFERENCES politicians(id),
     platform TEXT NOT NULL,
-    sentiment_score FLOAT NOT NULL,
-    issue_category TEXT NOT NULL,
-    content TEXT NOT NULL,
+    report_date DATE DEFAULT CURRENT_DATE,
+    
+    -- Aggregated counters for the Happiness Report
+    positive_count INTEGER DEFAULT 0,
+    negative_count INTEGER DEFAULT 0,
+    neutral_count INTEGER DEFAULT 0,
+    
+    -- Legacy fields for individual sentiment records
+    sentiment_score FLOAT,
+    issue_category TEXT,
+    content TEXT,
+    
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Migration: Add new columns if table already exists
+-- ALTER TABLE sentiment_analytics ADD COLUMN IF NOT EXISTS report_date DATE DEFAULT CURRENT_DATE;
+-- ALTER TABLE sentiment_analytics ADD COLUMN IF NOT EXISTS positive_count INTEGER DEFAULT 0;
+-- ALTER TABLE sentiment_analytics ADD COLUMN IF NOT EXISTS negative_count INTEGER DEFAULT 0;
+-- ALTER TABLE sentiment_analytics ADD COLUMN IF NOT EXISTS neutral_count INTEGER DEFAULT 0;
 
 -- Create indexes for better performance
 CREATE INDEX IF NOT EXISTS idx_users_politician_id ON users(politician_id);
