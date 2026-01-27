@@ -46,6 +46,7 @@ api_router.include_router(ai_routes.router, prefix="/ai", tags=["ai"])
 api_router.include_router(whatsapp_routes.router, prefix="/whatsapp", tags=["whatsapp"])
 api_router.include_router(verification_routes.router, prefix="/verification", tags=["verification"])
 api_router.include_router(social_routes.router, prefix="/social", tags=["Social"])
+api_router.include_router(dashboard_routes.router, prefix="/dashboard", tags=["Dashboard"])
 
 @api_router.get("/")
 async def root():
