@@ -127,7 +127,7 @@ export default function SentimentDashboard() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold tracking-tight">Happiness Report</h2>
-        {spikeAlert && (
+        {isSpike && (
           <span 
             className="px-3 py-1 rounded-full text-xs font-bold animate-pulse flex items-center gap-1"
             style={{ backgroundColor: COLORS.negative, color: 'white' }}
@@ -154,10 +154,10 @@ export default function SentimentDashboard() {
             <TrendingUp className="h-5 w-5" style={{ color: COLORS.positive }} />
           </div>
           <p className="text-4xl font-bold" style={{ color: COLORS.positive }}>
-            {latestStats.positive}
+            {positive}
           </p>
           <p className="text-sm mt-1" style={{ color: COLORS.textMuted }}>
-            Positive mentions
+            {trustScore.toFixed(1)}% positive
           </p>
         </div>
 
@@ -174,12 +174,12 @@ export default function SentimentDashboard() {
             <TrendingDown className="h-5 w-5" style={{ color: COLORS.negative }} />
           </div>
           <p className="text-4xl font-bold" style={{ color: COLORS.negative }}>
-            {latestStats.negative}
+            {negative}
           </p>
           <p className="text-sm mt-1" style={{ color: COLORS.textMuted }}>
             Negative mentions
           </p>
-          {spikeAlert && (
+          {isSpike && (
             <span 
               className="absolute top-2 right-2 px-2 py-0.5 rounded text-xs font-bold animate-pulse"
               style={{ backgroundColor: COLORS.negative, color: 'white' }}
@@ -201,7 +201,7 @@ export default function SentimentDashboard() {
             </span>
           </div>
           <p className="text-4xl font-bold" style={{ color: COLORS.neutral }}>
-            {latestStats.neutral}
+            {neutral}
           </p>
           <p className="text-sm mt-1" style={{ color: COLORS.textMuted }}>
             Neutral mentions
