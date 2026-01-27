@@ -15,7 +15,7 @@ def get_backend_url():
                     return line.split('=', 1)[1].strip().rstrip('/')
     except:
         pass
-    return 'https://legislator-hub.preview.emergentagent.com'
+    return 'https://legistream-1.preview.emergentagent.com'
 
 BASE_URL = get_backend_url()
 
