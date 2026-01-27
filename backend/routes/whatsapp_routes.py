@@ -12,7 +12,8 @@ import base64
 import httpx
 import random
 import string
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
+from urllib.parse import quote
 from emergentintegrations.llm.chat import LlmChat, UserMessage, FileContentWithMimeType
 
 router = APIRouter()
@@ -188,6 +189,86 @@ async def upload_to_supabase_storage(file_obj: dict, folder: str, client: httpx.
 class WhatsAppMessage(BaseModel):
     to: str
     message: str
+
+
+# ============================================================
+# AI REALITY MATRIX - Grievance Analysis Engine
+# ============================================================
+def analyze_grievance(text: str):
+    """
+    Analyzes the grievance text to determine priority, deadline, and category.
+    Strictly follows PRD 'Reality Matrix' keywords.
+    """
+    # Safety check for empty transcription
+    if not text:
+        return {
+            "priority_level": "LOW",
+            "deadline_timestamp": None,
+            "issue_type": "Other"
+        }
+
+    text_lower = text.lower()
+    now = datetime.utcnow()
+
+    # 1. CRITICAL (4 Hours) - PRD Keywords: Current, Fire, Accident, Open Wire
+    if any(word in text_lower for word in ["current", "fire", "accident", "open wire"]):
+        return {
+            "priority_level": "CRITICAL",
+            "deadline_timestamp": (now + timedelta(hours=4)).isoformat(),
+            "issue_type": "Emergency"
+        }
+
+    # 2. HIGH (24 Hours) - PRD Keywords: Water, Electricity, Sewage
+    # We also check 'drainage' as a synonym for sewage
+    for keyword in ["water", "electricity", "sewage", "drainage"]:
+        if keyword in text_lower:
+            return {
+                "priority_level": "HIGH",
+                "deadline_timestamp": (now + timedelta(hours=24)).isoformat(),
+                "issue_type": keyword.capitalize()
+            }
+
+    # 3. MEDIUM (7 Days) - PRD Keywords: Road, Construction, Cleaning
+    # We also check 'pothole' as a specific road issue
+    if any(word in text_lower for word in ["road", "construction", "cleaning", "pothole"]):
+        return {
+            "priority_level": "MEDIUM",
+            "deadline_timestamp": (now + timedelta(days=7)).isoformat(),
+            "issue_type": "Infrastructure"
+        }
+
+    # 4. LOW (No Deadline) - Default
+    return {
+        "priority_level": "LOW",
+        "deadline_timestamp": None,
+        "issue_type": "Other"
+    }
+
+
+def generate_assignment_link(ticket_id: str, issue_summary: str, deadline_str: str = "ASAP"):
+    """
+    Generates a WhatsApp Deep Link for officials.
+    PRD Feature B: Must include a nested link for the official to 'Click to Close'.
+    """
+    # Get bot number from env, sanitizing it for the URL
+    raw_bot_number = os.getenv("TWILIO_PHONE_NUMBER", "")
+    bot_number = raw_bot_number.replace("whatsapp:", "").replace("+", "")
+    
+    # 1. Construct the nested 'Close Ticket' link
+    # When clicked by the official, this opens THEIR WhatsApp with 'Fixed_ID' pre-filled
+    close_link = f"https://wa.me/{bot_number}?text=Fixed_{ticket_id}"
+    
+    # 2. Construct the main message body
+    # PRD Format: "URGENT Task: [Summary]... Deadline: [Time]... Click to close: [Link]"
+    message_body = (
+        f"URGENT Task: {issue_summary}. "
+        f"Deadline: {deadline_str}. "
+        f"Click here to close: {close_link}"
+    )
+    
+    # 3. Return the full encoded URL
+    return f"https://wa.me/?text={quote(message_body)}"
+
 
 @router.post("/webhook")
 async def whatsapp_webhook(request: Request):
