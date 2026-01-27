@@ -808,21 +808,39 @@ Respond with JSON only (no markdown):
         politician_id = politicians.data[0]['id']
         
         grievance_id = str(uuid.uuid4())
+        
+        # --- AI REALITY MATRIX: Analyze grievance for priority and deadline ---
+        # Use 'or ""' to ensure we pass a string even if transcription is None
+        transcription = voice_transcript or message
+        analysis = analyze_grievance(transcription or "")
+        
+        # Build grievance data with Reality Matrix fields
         grievance_data = {
             'id': grievance_id,
             'politician_id': politician_id,
-            'issue_type': category,
-            'village': f'From {name} ({phone})',
-            'description': message,
-            'ai_priority': priority,
+            'description': message,  # Raw text
             'status': 'PENDING',
+            'village': f'From {name} ({phone})',  # Placeholder (Location extraction is next phase)
+            
+            # AI-determined fields from Gemini intent detection
+            'issue_type': category,
+            'ai_priority': priority,
+            
+            # NEW FIELDS calculated by analyze_grievance (Reality Matrix)
+            'priority_level': analysis["priority_level"],
+            'deadline_timestamp': analysis["deadline_timestamp"],
+            
+            # Robustly handle media_url (only include if it exists in local scope)
+            'media_url': locals().get('stored_image_url') or locals().get('stored_audio_url'),
+            
             'created_at': datetime.now(timezone.utc).isoformat()
         }
         
         supabase.table('grievances').insert(grievance_data).execute()
-        print(f"✅ Grievance created: {grievance_id}")
+        print(f"✅ Grievance created: {grievance_id} with Reality Matrix: {analysis['priority_level']}")
         
-        priority_label = "HIGH" if priority >= 8 else "MEDIUM" if priority >= 5 else "LOW"
+        # Use Reality Matrix priority level for display
+        priority_label = analysis["priority_level"]
         
         # Build media notes based on what was received
         media_note = ""
