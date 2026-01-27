@@ -61,7 +61,7 @@ export default function HappinessReport({ user }) {
     }
     
     // Always finish loading
-    setLoading(false);
+    setLegacyLoading(false);
   };
 
   const formatIssueDistribution = () => {
