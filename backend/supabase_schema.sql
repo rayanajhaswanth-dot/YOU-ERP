@@ -21,22 +21,42 @@ CREATE TABLE IF NOT EXISTS users (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Grievances table
+-- Grievances table (Updated with AI Reality Matrix fields)
 CREATE TABLE IF NOT EXISTS grievances (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     politician_id UUID REFERENCES politicians(id),
-    constituent_name TEXT NOT NULL,
-    phone TEXT NOT NULL,
-    message TEXT NOT NULL,
+    constituent_name TEXT DEFAULT 'Anonymous Citizen',
+    phone TEXT,
+    village TEXT DEFAULT 'Unknown',
+    description TEXT NOT NULL,
+    message TEXT,
     source TEXT DEFAULT 'whatsapp',
+    
+    -- AI Reality Matrix Fields
+    priority_level TEXT DEFAULT 'LOW' CHECK (priority_level IN ('CRITICAL', 'HIGH', 'MEDIUM', 'LOW')),
+    deadline_timestamp TIMESTAMPTZ,
+    issue_type TEXT DEFAULT 'Other',
+    ai_priority INTEGER DEFAULT 5,
+    media_url TEXT,
+    
+    -- Legacy/Compatibility
     priority INTEGER DEFAULT 5,
-    status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'in_progress', 'resolved')),
+    status TEXT DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'IN_PROGRESS', 'RESOLVED', 'pending', 'in_progress', 'resolved')),
     resolution_notes TEXT,
     assigned_to UUID REFERENCES users(id),
     created_by UUID REFERENCES users(id),
     created_at TIMESTAMPTZ DEFAULT NOW(),
     resolved_at TIMESTAMPTZ
 );
+
+-- Migration: Add new columns if table already exists (run these if upgrading)
+-- ALTER TABLE grievances ADD COLUMN IF NOT EXISTS priority_level TEXT DEFAULT 'LOW';
+-- ALTER TABLE grievances ADD COLUMN IF NOT EXISTS deadline_timestamp TIMESTAMPTZ;
+-- ALTER TABLE grievances ADD COLUMN IF NOT EXISTS issue_type TEXT DEFAULT 'Other';
+-- ALTER TABLE grievances ADD COLUMN IF NOT EXISTS ai_priority INTEGER DEFAULT 5;
+-- ALTER TABLE grievances ADD COLUMN IF NOT EXISTS media_url TEXT;
+-- ALTER TABLE grievances ADD COLUMN IF NOT EXISTS village TEXT DEFAULT 'Unknown';
+-- ALTER TABLE grievances ADD COLUMN IF NOT EXISTS description TEXT;
 
 -- Posts table
 CREATE TABLE IF NOT EXISTS posts (
