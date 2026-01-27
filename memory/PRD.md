@@ -1,5 +1,10 @@
 # YOU - Governance ERP & Workflow Automation for Legislators
 
+## Changelog (2025-01-27)
+- **AI Reality Matrix Implemented:** `analyze_grievance()` function added to classify grievances by keyword-based priority (CRITICAL/HIGH/MEDIUM/LOW) with automatic deadline assignment
+- **Deep Link Feature Added:** `generate_assignment_link()` creates WhatsApp deep links for official task assignment with nested "Click to Close" links
+- **Grievance Data Enhanced:** New fields `priority_level`, `deadline_timestamp`, `media_url` integrated into grievance registration flow
+
 ## Original Problem Statement
 Build "YOU - Governance ERP & Workflow Automation for Legislators," a production-ready SaaS platform for Indian political leaders.
 
