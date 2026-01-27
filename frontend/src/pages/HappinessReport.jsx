@@ -62,8 +62,6 @@ export default function HappinessReport({ user }) {
     // Always finish loading
     setLoading(false);
   };
-    setLoading(false);
-  };
 
   const formatIssueDistribution = () => {
     if (!overview?.issue_distribution) return [];
