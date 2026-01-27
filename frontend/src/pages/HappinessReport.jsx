@@ -89,6 +89,9 @@ export default function HappinessReport({ user }) {
         <p className="text-slate-400 text-lg">Sentiment analytics & social listening</p>
       </div>
 
+      {/* NEW: Live Sentiment Dashboard Widget */}
+      <SentimentDashboard />
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="executive-card p-6" data-testid="average-sentiment">
           <div className="flex items-center justify-between mb-4">
