@@ -855,19 +855,24 @@ Respond with JSON only (no markdown):
         elif voice_transcription and len(voice_transcription) > 10:
             ocr_note = "\n\nTranscribed:\n{}...".format(voice_transcription[:200])
         
+        # Format deadline for display
+        deadline_note = ""
+        if analysis["deadline_timestamp"]:
+            deadline_note = f"\n⏰ Expected Resolution: {analysis['deadline_timestamp'][:16].replace('T', ' ')}"
+        
         response = """✅ Grievance Registered Successfully!
 
 📋 Summary: {}
 
 📁 Category: {}
-⚡ Priority: {} ({}/10)
+⚡ Priority: {} (AI Score: {}/10){}
 🔖 Reference ID: {}{}{}
 
-Your concern has been registered and will be reviewed by our team within 24-48 hours.
+Your concern has been registered and will be reviewed by our team.
 
 You'll receive updates as we work on resolving this.
 
-🙏 Thank you for reaching out!""".format(summary, category, priority_label, priority, grievance_id[:8].upper(), media_note, ocr_note)
+🙏 Thank you for reaching out!""".format(summary, category, priority_label, priority, deadline_note, grievance_id[:8].upper(), media_note, ocr_note)
         
         return response
         
