@@ -42,39 +42,47 @@ async def analyze_sentiment(request: AnalysisRequest):
         today_str = date.today().isoformat()
         politician_id = os.getenv("POLITICIAN_ID", "6e56793a-558b-4834-ab0d-36387159653a")
         
-        # Check existing row for Today + Platform
-        existing = supabase.table("sentiment_analytics").select("*")\
-            .eq("report_date", today_str)\
-            .eq("platform", request.platform)\
-            .eq("politician_id", politician_id)\
-            .execute()
-        
-        if existing.data:
-            # Update existing row counters
-            row_id = existing.data[0]['id']
-            col_name = f"{sentiment_category}_count"
-            current_val = existing.data[0].get(col_name, 0)
+        db_success = False
+        try:
+            # Check existing row for Today + Platform
+            existing = supabase.table("sentiment_analytics").select("*")\
+                .eq("report_date", today_str)\
+                .eq("platform", request.platform)\
+                .eq("politician_id", politician_id)\
+                .execute()
             
-            supabase.table("sentiment_analytics").update({
-                col_name: current_val + 1
-            }).eq("id", row_id).execute()
-        else:
-            # Create new row for the day
-            new_row = {
-                "politician_id": politician_id,
-                "platform": request.platform,
-                "report_date": today_str,
-                "positive_count": 1 if sentiment_category == "positive" else 0,
-                "negative_count": 1 if sentiment_category == "negative" else 0,
-                "neutral_count": 1 if sentiment_category == "neutral" else 0,
-            }
-            supabase.table("sentiment_analytics").insert(new_row).execute()
+            if existing.data:
+                # Update existing row counters
+                row_id = existing.data[0]['id']
+                col_name = f"{sentiment_category}_count"
+                current_val = existing.data[0].get(col_name, 0)
+                
+                supabase.table("sentiment_analytics").update({
+                    col_name: current_val + 1
+                }).eq("id", row_id).execute()
+                db_success = True
+            else:
+                # Create new row for the day
+                new_row = {
+                    "politician_id": politician_id,
+                    "platform": request.platform,
+                    "report_date": today_str,
+                    "positive_count": 1 if sentiment_category == "positive" else 0,
+                    "negative_count": 1 if sentiment_category == "negative" else 0,
+                    "neutral_count": 1 if sentiment_category == "neutral" else 0,
+                }
+                supabase.table("sentiment_analytics").insert(new_row).execute()
+                db_success = True
+        except Exception as db_err:
+            # Database might not have the new columns yet - still return analysis
+            print(f"DB aggregation skipped (schema may need update): {db_err}")
         
         return {
             "status": "success",
             "sentiment": sentiment_category,
-            "score": polarity,
-            "spike_detected": spike_warning  # Frontend can use this for visual alerts
+            "score": round(polarity, 3),
+            "spike_detected": spike_warning,
+            "db_recorded": db_success
         }
         
     except Exception as e:
@@ -95,11 +103,13 @@ async def get_happiness_data():
         response = supabase.table("sentiment_analytics")\
             .select("*")\
             .eq("politician_id", politician_id)\
-            .order("report_date", desc=True)\
+            .order("created_at", desc=True)\
             .limit(7)\
             .execute()
         
         return response.data
         
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"Dashboard Error: {e}")
+        # Return empty data rather than error for frontend resilience
+        return []
