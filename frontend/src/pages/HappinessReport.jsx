@@ -21,28 +21,47 @@ export default function HappinessReport({ user }) {
 
   const fetchAnalytics = async () => {
     const token = localStorage.getItem('token');
+    const headers = { Authorization: `Bearer ${token}` };
     
-    // These are legacy analytics endpoints - use short timeout and don't block UI
-    const config = {
-      headers: { Authorization: `Bearer ${token}` },
-      timeout: 5000  // 5 second timeout
+    // Quick timeout wrapper
+    const fetchWithTimeout = async (url, options, timeout = 3000) => {
+      const controller = new AbortController();
+      const id = setTimeout(() => controller.abort(), timeout);
+      try {
+        const response = await axios.get(url, { ...options, signal: controller.signal });
+        clearTimeout(id);
+        return response;
+      } catch (e) {
+        clearTimeout(id);
+        throw e;
+      }
     };
     
+    // Fetch overview (don't block if fails)
     try {
-      const overviewResponse = await axios.get(`${BACKEND_URL}/api/analytics/sentiment/overview`, config);
+      const overviewResponse = await fetchWithTimeout(
+        `${BACKEND_URL}/api/analytics/sentiment/overview`,
+        { headers }
+      );
       setOverview(overviewResponse.data);
     } catch (e) {
-      console.log('Overview analytics not available:', e.message);
+      console.log('Overview analytics not available');
     }
 
+    // Fetch sentiment (don't block if fails)
     try {
-      const sentimentResponse = await axios.get(`${BACKEND_URL}/api/analytics/sentiment?days=30`, config);
+      const sentimentResponse = await fetchWithTimeout(
+        `${BACKEND_URL}/api/analytics/sentiment?days=30`,
+        { headers }
+      );
       setSentimentData(sentimentResponse.data);
     } catch (e) {
-      console.log('Sentiment analytics not available:', e.message);
+      console.log('Sentiment analytics not available');
     }
     
-    // Always finish loading regardless of API results
+    // Always finish loading
+    setLoading(false);
+  };
     setLoading(false);
   };
 
