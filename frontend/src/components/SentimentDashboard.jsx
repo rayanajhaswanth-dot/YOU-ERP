@@ -103,6 +103,21 @@ export default function SentimentDashboard() {
     );
   }
 
+  // SAFETY CHECK: Handle empty data to prevent crash
+  const latestData = chartData.length > 0 ? chartData[chartData.length - 1] : null;
+
+  // Safe Counts (Default to 0 if missing)
+  const positive = latestStats?.positive ?? 0;
+  const negative = latestStats?.negative ?? 0;
+  const neutral = latestStats?.neutral ?? 0;
+  const total = positive + negative + neutral;
+
+  // Safe Calculation (Prevent Division by Zero)
+  const trustScore = total > 0 ? ((positive / total) * 100) : 0;
+
+  // Safe Spike Detection
+  const isSpike = spikeAlert || (latestData?.spike_detected === true);
+
   return (
     <div 
       className="p-6 rounded-xl shadow-lg space-y-6"
