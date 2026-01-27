@@ -3,9 +3,23 @@ from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 import os
 import logging
+import subprocess
+import sys
 from pathlib import Path
 
-from routes import auth_routes, grievance_routes, posts_routes, analytics_routes, ai_routes, whatsapp_routes, verification_routes
+# TextBlob Corpora Download (for Sentiment Engine)
+try:
+    from textblob import TextBlob
+    # Simple test to verify model availability
+    TextBlob("test").sentiment
+except Exception:
+    print("Installing TextBlob Corpora for Sentiment Engine...")
+    try:
+        subprocess.check_call([sys.executable, "-m", "textblob.download_corpora"])
+    except Exception as e:
+        print(f"Warning: Could not auto-download corpora. Sentiment analysis might vary. Error: {e}")
+
+from routes import auth_routes, grievance_routes, posts_routes, analytics_routes, ai_routes, whatsapp_routes, verification_routes, social_routes
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -31,6 +45,7 @@ api_router.include_router(analytics_routes.router, prefix="/analytics", tags=["a
 api_router.include_router(ai_routes.router, prefix="/ai", tags=["ai"])
 api_router.include_router(whatsapp_routes.router, prefix="/whatsapp", tags=["whatsapp"])
 api_router.include_router(verification_routes.router, prefix="/verification", tags=["verification"])
+api_router.include_router(social_routes.router, prefix="/social", tags=["Social"])
 
 @api_router.get("/")
 async def root():
