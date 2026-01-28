@@ -76,6 +76,7 @@ api_router.include_router(verification_routes.router, prefix="/verification", ta
 api_router.include_router(social_routes.router, prefix="/social", tags=["Social"])
 api_router.include_router(dashboard_routes.router, prefix="/dashboard", tags=["Dashboard"])
 api_router.include_router(tickets_routes.router, prefix="/tickets", tags=["Tickets"])
+api_router.include_router(broadcast_routes.router, prefix="/broadcast", tags=["Broadcast"])
 
 @api_router.get("/")
 async def root():
