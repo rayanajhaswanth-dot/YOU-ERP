@@ -3,6 +3,7 @@ import { LayoutGrid, MessageSquareWarning, Megaphone, BarChart3, Settings, LogOu
 import BroadcastWidget from './components/BroadcastWidget';
 import SentimentDashboard from './components/SentimentDashboard';
 import GrievanceFeed from './components/GrievanceFeed';
+import KPIGrid from './components/KPIGrid';
 
 const SidebarItem = ({ icon: Icon, label, active }) => (
   <div className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-all ${
@@ -60,6 +61,11 @@ const App = () => {
             <h2 className="text-3xl font-bold text-white">Good Afternoon, Leader.</h2>
             <p className="text-gray-400 mt-1">Here is your daily governance briefing.</p>
           </div>
+
+          {/* 0. KPI LAYER (Metrics) */}
+          <section>
+            <KPIGrid />
+          </section>
 
           {/* 1. ACTION LAYER (Broadcast) */}
           <section>
