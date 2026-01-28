@@ -1,194 +1,244 @@
 import React, { useState } from 'react';
-import { Sparkles, Send, Edit3, X, MessageCircle, Facebook, Twitter } from 'lucide-react';
+import { Card, CardHeader, CardTitle, CardContent } from "./ui/card";
+import { Button } from "./ui/button";
+import { Textarea } from "./ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
+import { Megaphone, Twitter, Facebook, MessageCircle, Sparkles, Loader2, Send } from "lucide-react";
+import { useToast } from "../hooks/use-toast";
+
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
 const BroadcastWidget = () => {
   const [topic, setTopic] = useState('');
-  const [isDrafting, setIsDrafting] = useState(false);
-  const [drafts, setDrafts] = useState(null); // null = no drafts yet
-  const [status, setStatus] = useState('IDLE'); // IDLE, DRAFTING, READY, POSTED
-  const [isExpanded, setIsExpanded] = useState(false); // COLLAPSIBLE STATE
+  const [tone, setTone] = useState('professional');
+  const [loading, setLoading] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const [drafts, setDrafts] = useState(null);
+  const { toast } = useToast();
 
-  const handleDraft = async () => {
-    if (!topic.trim()) return;
-    
-    setIsDrafting(true);
-    setStatus('DRAFTING');
+  // --- STEP 6 LOGIC: AI CONTENT GENERATION ---
+  const handleGenerate = async () => {
+    if (!topic) return;
+    setLoading(true);
+    setDrafts(null);
 
     try {
-      // Call the Mock AI Endpoint we created in dashboard_routes.py
-      const response = await fetch('/api/dashboard/draft', {
+      const token = localStorage.getItem('token');
+      
+      const response = await fetch(`${BACKEND_URL}/api/dashboard/draft`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ raw_topic: topic })
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ topic, tone }),
       });
 
-      if (!response.ok) throw new Error("Drafting failed");
-      
+      if (!response.ok) throw new Error("AI Generation failed");
+
       const data = await response.json();
       setDrafts(data);
-      setStatus('READY');
-    } catch (err) {
-      console.error("Drafting Error:", err);
-      // Fallback for simulation if backend is unreachable
-      setDrafts({
-        twitter: `🚨 UPDATE: ${topic}. We are committed to immediate action! #ConstituencyFirst`,
-        whatsapp: `🙏 Namaste. Important update regarding: ${topic}. Your Sevak, [Leader Name].`,
-        facebook: `OFFICIAL STATEMENT: We have taken note of ${topic} and are working on it.`
+      toast({
+        title: "Drafts Generated",
+        description: "Review and edit before posting.",
       });
-      setStatus('READY');
+    } catch (error) {
+      console.error(error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Could not generate drafts. Is the Backend running?",
+      });
     } finally {
-      setIsDrafting(false);
+      setLoading(false);
     }
   };
 
-  const handlePost = (platform) => {
-    // In a real app, this would hit an API. For MVP, we simulate success.
-    alert(`Published to ${platform} successfully!`);
-  };
+  // --- STEP 7 LOGIC: META/TWITTER PUBLISHING ---
+  const handlePost = async (platform, content) => {
+    const encodedText = encodeURIComponent(content);
 
-  const resetWidget = () => {
-      setStatus('IDLE');
-      setDrafts(null);
-      setTopic('');
-      setIsExpanded(false);
-  };
+    // 1. Client-Side Intent Links (Twitter/WhatsApp) - "Zero Touch" implementation
+    if (platform === 'twitter') {
+        window.open(`https://twitter.com/intent/tweet?text=${encodedText}`, '_blank');
+        toast({
+          title: "Opening Twitter",
+          description: "Complete the post in the new window.",
+        });
+        return;
+    }
+    if (platform === 'whatsapp') {
+        window.open(`https://wa.me/?text=${encodedText}`, '_blank');
+        toast({
+          title: "Opening WhatsApp",
+          description: "Select contacts to share with.",
+        });
+        return;
+    }
 
-  // --- COMPACT VIEW (Default) ---
-  if (!isExpanded) {
-      return (
-        <div 
-            onClick={() => setIsExpanded(true)}
-            className="bg-[#1F2937] p-4 rounded-xl shadow-lg border border-gray-700 w-full mb-8 cursor-pointer hover:border-[#FF9933] transition-all group flex items-center gap-4"
-        >
-            <div className="bg-[#111827] p-2 rounded-full border border-gray-700 group-hover:border-[#FF9933]">
-                <Edit3 className="text-[#FF9933]" size={20} />
-            </div>
-            <span className="text-gray-400 font-medium text-lg">
-                Start a quick broadcast...
-            </span>
-        </div>
-      );
-  }
-
-  // --- EXPANDED VIEW ---
-  return (
-    <div className="bg-[#1F2937] p-6 rounded-xl shadow-lg border border-gray-700 w-full mb-8 relative animate-in fade-in zoom-in-95 duration-200">
-      
-      {/* CLOSE BUTTON */}
-      <button 
-        onClick={resetWidget}
-        className="absolute top-4 right-4 text-gray-500 hover:text-white"
-      >
-        <X size={20} />
-      </button>
-
-      {/* HEADER */}
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-bold text-gray-100 flex items-center gap-2">
-          <Sparkles className="text-[#FF9933]" size={20} />
-          Broadcast Center
-        </h2>
-        <span className="text-xs text-gray-500 uppercase tracking-widest font-semibold pr-8">AI Drafter Active</span>
-      </div>
-
-      {/* INPUT AREA */}
-      <div className="relative">
-        <textarea
-          value={topic}
-          onChange={(e) => setTopic(e.target.value)}
-          placeholder="What would you like to announce today? (e.g., 'Inaugurated new road in Ward 4')"
-          className="w-full bg-[#111827] text-white rounded-lg p-4 min-h-[100px] border border-gray-700 focus:border-[#FF9933] focus:ring-1 focus:ring-[#FF9933] outline-none transition-all resize-none"
-          disabled={status === 'POSTED'}
-          autoFocus
-        />
-        
-        {/* ACTION BAR */}
-        <div className="flex justify-end mt-3">
-            {status === 'IDLE' || status === 'READY' ? (
-                <button
-                    onClick={handleDraft}
-                    disabled={!topic.trim() || isDrafting}
-                    className={`flex items-center gap-2 px-6 py-2 rounded-lg font-bold transition-all ${
-                        !topic.trim() 
-                        ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
-                        : 'bg-[#FF9933] text-black hover:bg-orange-400 hover:shadow-[0_0_10px_rgba(255,153,51,0.3)]'
-                    }`}
-                >
-                    {isDrafting ? (
-                        <>Processing...</>
-                    ) : (
-                        <><Sparkles size={18} /> Draft with AI</>
-                    )}
-                </button>
-            ) : (
-                <button 
-                    onClick={() => { setStatus('IDLE'); setDrafts(null); setTopic(''); }}
-                    className="text-gray-400 hover:text-white text-sm"
-                >
-                    Start New Post
-                </button>
-            )}
-        </div>
-      </div>
-
-      {/* DRAFTS DISPLAY (Only shows after drafting) */}
-      {status === 'READY' && drafts && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    // 2. Server-Side API Call (Facebook) - Direct Graph API
+    if (platform === 'facebook') {
+        setPublishing(true);
+        try {
+            const token = localStorage.getItem('token');
             
-            {/* TWITTER CARD */}
-            <div className="bg-[#111827] p-4 rounded-lg border border-gray-800 hover:border-gray-600 transition-colors group">
-                <div className="flex items-center gap-2 mb-3 text-blue-400">
-                    <Twitter size={16} />
-                    <span className="text-xs font-bold uppercase">Twitter / X</span>
-                </div>
-                <p className="text-gray-300 text-sm mb-4 leading-relaxed min-h-[60px]">
-                    {drafts.twitter}
-                </p>
-                <button 
-                    onClick={() => handlePost('Twitter')}
-                    className="w-full py-2 bg-blue-500/10 text-blue-400 border border-blue-500/30 rounded font-medium text-xs hover:bg-blue-500 hover:text-white transition-colors flex justify-center items-center gap-2"
-                >
-                    <Send size={12} /> Post Tweet
-                </button>
-            </div>
+            // Call the Step 7 Backend Endpoint
+            const response = await fetch(`${BACKEND_URL}/api/broadcast/publish`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ content, platform: 'facebook' })
+            });
 
-            {/* WHATSAPP CARD */}
-            <div className="bg-[#111827] p-4 rounded-lg border border-gray-800 hover:border-gray-600 transition-colors group">
-                <div className="flex items-center gap-2 mb-3 text-green-400">
-                    <MessageCircle size={16} />
-                    <span className="text-xs font-bold uppercase">WhatsApp</span>
-                </div>
-                <p className="text-gray-300 text-sm mb-4 leading-relaxed min-h-[60px]">
-                    {drafts.whatsapp}
-                </p>
-                <button 
-                    onClick={() => handlePost('WhatsApp')}
-                    className="w-full py-2 bg-green-500/10 text-green-400 border border-green-500/30 rounded font-medium text-xs hover:bg-green-500 hover:text-white transition-colors flex justify-center items-center gap-2"
-                >
-                    <Send size={12} /> Blast to Groups
-                </button>
-            </div>
+            if (!response.ok) {
+                // Handle specific backend errors
+                if (response.status === 503) throw new Error("Credentials Missing");
+                throw new Error("API Error");
+            }
+            
+            toast({
+                title: "Published!",
+                description: "Successfully posted to Facebook Page.",
+                className: "bg-green-600 border-none text-white"
+            });
 
-            {/* FACEBOOK CARD */}
-            <div className="bg-[#111827] p-4 rounded-lg border border-gray-800 hover:border-gray-600 transition-colors group">
-                <div className="flex items-center gap-2 mb-3 text-blue-600">
-                    <Facebook size={16} />
-                    <span className="text-xs font-bold uppercase">Facebook</span>
-                </div>
-                <p className="text-gray-300 text-sm mb-4 leading-relaxed min-h-[60px]">
-                    {drafts.facebook}
-                </p>
-                <button 
-                    onClick={() => handlePost('Facebook')}
-                    className="w-full py-2 bg-blue-600/10 text-blue-500 border border-blue-600/30 rounded font-medium text-xs hover:bg-blue-600 hover:text-white transition-colors flex justify-center items-center gap-2"
-                >
-                    <Send size={12} /> Share Update
-                </button>
-            </div>
+        } catch (error) {
+            // --- FALLBACK: Manual Clipboard Copy ---
+            console.warn("API Post failed, falling back to clipboard:", error);
+            navigator.clipboard.writeText(content);
+            window.open("https://facebook.com", '_blank');
+            
+            toast({
+                title: error.message === "Credentials Missing" ? "Setup Required" : "Copied to Clipboard",
+                description: "API keys missing. Opening Facebook for manual paste.",
+            });
+        } finally {
+            setPublishing(false);
+        }
+    }
+  };
 
+  return (
+    <Card className="col-span-1 border-orange-500/20 bg-slate-900/50 backdrop-blur h-[400px] flex flex-col">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-lg font-bold text-white flex items-center gap-2">
+          <Megaphone className="h-5 w-5 text-orange-500" />
+          Broadcast Center
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="flex-1 overflow-y-auto space-y-4 pr-2">
+        {/* Input Section */}
+        <div className="space-y-3">
+          <Textarea 
+            placeholder="What needs to be communicated? (e.g. 'Road work in Ward 5 completed')" 
+            className="bg-slate-950 border-slate-800 text-white min-h-[80px]"
+            value={topic}
+            onChange={(e) => setTopic(e.target.value)}
+            data-testid="broadcast-topic-input"
+          />
+          <div className="flex gap-2">
+            <Select value={tone} onValueChange={setTone}>
+              <SelectTrigger className="w-[140px] bg-slate-950 border-slate-800 text-white" data-testid="broadcast-tone-select">
+                <SelectValue placeholder="Tone" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="professional">Professional</SelectItem>
+                <SelectItem value="urgent">Urgent</SelectItem>
+                <SelectItem value="empathetic">Empathetic</SelectItem>
+                <SelectItem value="political">Political</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button 
+              className="flex-1 bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white"
+              onClick={handleGenerate}
+              disabled={loading || !topic}
+              data-testid="broadcast-generate-btn"
+            >
+              {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Sparkles className="h-4 w-4 mr-2" />}
+              {loading ? "Drafting..." : "Generate with AI"}
+            </Button>
+          </div>
         </div>
-      )}
-    </div>
+
+        {/* Drafts Section */}
+        {drafts && (
+          <div className="space-y-4 pt-2 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            {/* Twitter Draft */}
+            <div className="p-3 rounded-lg border border-slate-800 bg-slate-950">
+              <div className="flex justify-between items-center mb-2">
+                <div className="flex items-center gap-2 text-sky-500 font-medium text-sm">
+                  <Twitter className="h-4 w-4" /> Twitter (X)
+                </div>
+                <Button 
+                  size="sm" 
+                  variant="ghost" 
+                  className="h-6 text-xs text-sky-500 hover:text-sky-400 hover:bg-sky-950"
+                  onClick={() => handlePost('twitter', drafts.twitter)}
+                  data-testid="post-twitter-btn"
+                >
+                  <Send className="h-3 w-3 mr-1" /> Post
+                </Button>
+              </div>
+              <Textarea 
+                value={drafts.twitter} 
+                onChange={(e) => setDrafts({...drafts, twitter: e.target.value})}
+                className="text-xs bg-transparent border-none p-0 h-auto resize-none focus-visible:ring-0 text-slate-300"
+              />
+            </div>
+
+            {/* WhatsApp Draft */}
+            <div className="p-3 rounded-lg border border-slate-800 bg-slate-950">
+              <div className="flex justify-between items-center mb-2">
+                <div className="flex items-center gap-2 text-green-500 font-medium text-sm">
+                  <MessageCircle className="h-4 w-4" /> WhatsApp
+                </div>
+                <Button 
+                  size="sm" 
+                  variant="ghost" 
+                  className="h-6 text-xs text-green-500 hover:text-green-400 hover:bg-green-950"
+                  onClick={() => handlePost('whatsapp', drafts.whatsapp)}
+                  data-testid="post-whatsapp-btn"
+                >
+                  <Send className="h-3 w-3 mr-1" /> Send
+                </Button>
+              </div>
+              <Textarea 
+                value={drafts.whatsapp} 
+                onChange={(e) => setDrafts({...drafts, whatsapp: e.target.value})}
+                className="text-xs bg-transparent border-none p-0 h-auto resize-none focus-visible:ring-0 text-slate-300"
+              />
+            </div>
+            
+             {/* Facebook Draft */}
+             <div className="p-3 rounded-lg border border-slate-800 bg-slate-950">
+              <div className="flex justify-between items-center mb-2">
+                <div className="flex items-center gap-2 text-blue-500 font-medium text-sm">
+                  <Facebook className="h-4 w-4" /> Facebook
+                </div>
+                <Button 
+                  size="sm" 
+                  variant="ghost" 
+                  className="h-6 text-xs text-blue-500 hover:text-blue-400 hover:bg-blue-950"
+                  onClick={() => handlePost('facebook', drafts.facebook)}
+                  disabled={publishing}
+                  data-testid="post-facebook-btn"
+                >
+                  {publishing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3 mr-1" />}
+                  {publishing ? "Posting..." : "Post Now"}
+                </Button>
+              </div>
+              <Textarea 
+                value={drafts.facebook} 
+                onChange={(e) => setDrafts({...drafts, facebook: e.target.value})}
+                className="text-xs bg-transparent border-none p-0 h-auto resize-none focus-visible:ring-0 text-slate-300"
+              />
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 };
 
