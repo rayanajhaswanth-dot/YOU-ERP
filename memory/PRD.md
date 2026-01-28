@@ -1,133 +1,60 @@
 # YOU - Governance ERP & Workflow Automation for Legislators
 
-## Changelog (2025-01-27)
-- **AI Reality Matrix Implemented:** `analyze_grievance()` function added to classify grievances by keyword-based priority (CRITICAL/HIGH/MEDIUM/LOW) with automatic deadline assignment
-- **Deep Link Feature Added:** `generate_assignment_link()` creates WhatsApp deep links for official task assignment with nested "Click to Close" links
-- **Grievance Data Enhanced:** New fields `priority_level`, `deadline_timestamp`, `media_url` integrated into grievance registration flow
+## Product Overview
+A production-ready SaaS platform for Indian political leaders featuring AI-powered governance tools.
 
-## Original Problem Statement
-Build "YOU - Governance ERP & Workflow Automation for Legislators," a production-ready SaaS platform for Indian political leaders.
+## Changelog
+
+### 2025-01-28
+- **Dashboard MVP Complete**: Implemented "The Briefing Room" with Executive Feed layout
+- **KPIGrid Component**: 4 KPI cards (Approval Rating, Political Momentum, Active Criticals, Daily Engagement)
+- **BroadcastWidget**: Collapsible AI-powered multi-platform content drafting
+- **SentimentDashboard**: Executive Briefing with Digital Perception & Ground Stability metrics
+- **GrievanceFeed**: Critical Alerts with WhatsApp deep-link assignment feature
+- **Social Listener Service**: Background service for sentiment analysis simulation
+
+### 2025-01-27
+- **AI Reality Matrix Implemented**: `analyze_grievance()` function for keyword-based priority classification
+- **Deep Link Feature Added**: `generate_assignment_link()` for official task assignment
+- **Grievance Data Enhanced**: New fields `priority_level`, `deadline_timestamp`, `media_url`
+- **Sentiment Engine**: TextBlob-based local sentiment analysis (no API cost)
 
 ## Tech Stack
-- **Frontend:** React 19 (Vite), Shadcn UI, TailwindCSS, Framer Motion
-- **Backend:** FastAPI (Python) - *Note: Deviated from requested Node.js*
-- **Database:** Supabase (PostgreSQL) with Row Level Security
-- **AI:** Google Gemini (via Emergent LLM Key)
-- **Messaging:** Twilio WhatsApp Bot
-- **Theme:** "Executive Saffron" - Slate-900 background, #f97316 accents
+- **Frontend**: React + TailwindCSS + Recharts
+- **Backend**: FastAPI (Python)
+- **Database**: Supabase (PostgreSQL)
+- **AI**: OpenAI Whisper (voice), GPT-4o (images), Gemini (text), TextBlob (sentiment)
+- **Messaging**: Twilio WhatsApp API
 
-## Authentication
-- Multi-role: Politician, OSD (Officer on Special Duty), PA (Personal Assistant)
-- Supabase Auth with JWT tokens
-- Test credentials: `ramkumar@example.com` (any password works in dev mode)
-
----
-
-## Implemented Features
-
-### 1. Dashboard (The Briefing Room) ✅
-- Real-time stats: Total grievances, resolved, posts, published
-- Weekly activity chart with Recharts
-- AI-generated constituency summary (Gemini)
-- Campaign suggestions
-
-### 2. Help People (Grievance Engine) ✅
-- Grievance list with dynamic priority calculation
-- Metrics dashboard (total, resolved, pending, long-pending)
-- Top 3 priority issues section
-- Status management (Pending → In Progress → Resolved)
-- AI-powered grievance analysis and triage
-
-### 3. Voice Grievance (Audio-to-Text) ✅ [NEW - Jan 24, 2026]
-- Microphone recording button on Help People page
-- MediaRecorder API for audio capture
-- Gemini 2.0 Flash transcription via `/api/ai/transcribe`
-- Supports Hindi, Tamil, Telugu, Kannada, Malayalam, Bengali, Marathi, Gujarati, Punjabi
-- Auto-translation to English for non-English audio
-
-### 4. WhatsApp Bot ✅
-- Twilio integration for receiving grievances
-- Text message processing with AI analysis
-- **Interactive Chatbot** - Detects intent (Query/Grievance/Followup/Thanks)
-- **Multimodal Orchestrator V6** [UPDATED - Jan 24, 2026]
-  - **Voice transcription** using **Sarvam AI** (`saaras:v1` model)
-    - Specialized for Indian regional dialects
-    - Supports Hindi, Tamil, Telugu, Kannada, Malayalam, Bengali, Marathi, Gujarati, Punjabi
-    - Handles code-switching (Hinglish/Telugish)
-  - **Image OCR** using **GPT-4o Vision** (OpenAI API)
-    - High detail image analysis
-    - Structured JSON response with OCR text extraction
-  - Extended timeouts (120s for download, 90s for AI processing)
-- Auto-priority assignment
-
-### 5. Photo Verification ✅
-- Staff upload "after" photos when resolving grievances
-- AI comparison with "before" photos
-
-### 6. Send News (Broadcast Center) 🔄 UI Only
-- Page exists but backend needs `posts` table in Supabase
-- AI post polishing endpoint ready
-
-### 7. Happiness Report (Sentiment Analytics) 🔄 UI Only
-- Page exists but backend needs `sentiment_analytics` table in Supabase
-
----
+## Core Modules
+1. **Briefing Room** - Executive dashboard with KPIs and real-time feeds
+2. **Help People** - WhatsApp grievance bot with voice/image processing
+3. **Send News** - AI-powered broadcast drafting
+4. **Happiness Report** - Sentiment analytics dashboard
 
 ## API Endpoints
+- `POST /api/dashboard/draft` - AI content drafting
+- `GET /api/dashboard/grievances` - Critical issues feed
+- `GET /api/dashboard/stats` - Dashboard statistics
+- `POST /api/social/analyze` - Sentiment analysis
+- `GET /api/social/dashboard` - Sentiment data for charts
+- `POST /api/whatsapp/webhook` - WhatsApp message processing
 
-### Authentication
-- `POST /api/auth/login` - User login
-- `POST /api/auth/register` - User registration
-- `GET /api/auth/me` - Get current user
+## Database Schema Updates Required
+```sql
+ALTER TABLE grievances ADD COLUMN IF NOT EXISTS priority_level TEXT DEFAULT 'LOW';
+ALTER TABLE grievances ADD COLUMN IF NOT EXISTS deadline_timestamp TIMESTAMPTZ;
+ALTER TABLE grievances ADD COLUMN IF NOT EXISTS issue_type TEXT DEFAULT 'Other';
+ALTER TABLE grievances ADD COLUMN IF NOT EXISTS media_url TEXT;
+ALTER TABLE sentiment_analytics ADD COLUMN IF NOT EXISTS report_date DATE DEFAULT CURRENT_DATE;
+ALTER TABLE sentiment_analytics ADD COLUMN IF NOT EXISTS positive_count INTEGER DEFAULT 0;
+ALTER TABLE sentiment_analytics ADD COLUMN IF NOT EXISTS negative_count INTEGER DEFAULT 0;
+ALTER TABLE sentiment_analytics ADD COLUMN IF NOT EXISTS neutral_count INTEGER DEFAULT 0;
+```
 
-### Grievances
-- `GET /api/grievances/` - List grievances
-- `POST /api/grievances/` - Create grievance
-- `PATCH /api/grievances/{id}` - Update status
-- `GET /api/grievances/metrics` - Get metrics
-
-### AI
-- `POST /api/ai/transcribe` - Audio transcription (NEW)
-- `POST /api/ai/analyze-grievance` - Grievance analysis
-- `POST /api/ai/generate-constituency-summary` - Dashboard summary
-- `POST /api/ai/polish-post` - Social media post polishing
-- `POST /api/ai/analyze-sentiment` - Sentiment analysis
-
-### Analytics
-- `GET /api/analytics/dashboard` - Dashboard stats
-- `GET /api/analytics/sentiment` - Sentiment data
-- `GET /api/analytics/sentiment/overview` - Sentiment overview
-
-### WhatsApp
-- `POST /api/whatsapp/webhook` - Twilio webhook
-
----
-
-## Database Schema (Supabase)
-Tables: `politicians`, `users`, `grievances`, `posts`, `sentiment_analytics`
-See `/app/backend/supabase_schema.sql` for full schema.
-
-**Note:** `posts` and `sentiment_analytics` tables need to be created manually in Supabase.
-
----
-
-## Backlog
-
-### P0 - Critical
-- None currently
-
-### P1 - High Priority
-- Create `posts` table in Supabase to enable Send News functionality
-- Create `sentiment_analytics` table for Happiness Report
-- Complete Send News backend integration
-- Complete Happiness Report backend integration
-
-### P2 - Medium Priority
-- Real-time System Ticker (Socket.io)
-- Job queue for long-running audio processing
-- Full multi-role access control
-
-### P3 - Future
-- Migrate to Node.js/Express if required
-- Advanced sentiment analytics dashboard
-- Social media platform integrations
+## Pending Tasks
+- [ ] Test WhatsApp voice transcription (Telugu, >30 seconds)
+- [ ] Run Supabase schema migrations
+- [ ] Connect real social media APIs
+- [ ] Multi-role access control
+- [ ] Real-time ticker with Socket.io
