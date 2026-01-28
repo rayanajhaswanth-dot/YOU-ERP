@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { AlertTriangle, MapPin, CheckCircle, ArrowRight, Activity } from 'lucide-react';
+import { AlertTriangle, MapPin, CheckCircle, Share2 } from 'lucide-react';
 
 const GrievanceFeed = () => {
   const [grievances, setGrievances] = useState([]);
@@ -11,7 +11,7 @@ const GrievanceFeed = () => {
         const response = await fetch('/api/dashboard/grievances');
         if (response.ok) {
           const data = await response.json();
-          // Safety check
+          // Safety check to ensure we always have an array
           setGrievances(Array.isArray(data) ? data : []);
         } else {
           setGrievances([]);
@@ -27,7 +27,23 @@ const GrievanceFeed = () => {
     fetchGrievances();
   }, []);
 
-  if (loading) return <div className="h-32 bg-[#1F2937] rounded-xl animate-pulse"></div>;
+  const handleAssign = (item) => {
+    // PRD Feature B: Deep Link Assignment
+    // Generates a pre-filled WhatsApp message for the official
+    const message = 
+      `🚨 *URGENT TASK ASSIGNMENT*\n\n` +
+      `*Issue:* ${item.issue_type || 'General Issue'}\n` +
+      `*Location:* ${item.village || 'Constituency'}\n` +
+      `*Priority:* ${item.priority_level || 'HIGH'}\n\n` +
+      `*Description:* ${item.description}\n\n` +
+      `Please resolve this immediately and share proof of completion.`;
+
+    // Opens WhatsApp Web or App with the drafted text
+    const url = `https://wa.me/?text=${encodeURIComponent(message)}`;
+    window.open(url, '_blank');
+  };
+
+  if (loading) return <div className="h-32 bg-[#1F2937] rounded-xl animate-pulse border border-gray-800"></div>;
 
   return (
     <div className="w-full">
@@ -58,7 +74,7 @@ const GrievanceFeed = () => {
                   isCritical ? 'border-red-500' : 'border-orange-500'
                 }`}
               >
-                <div>
+                <div className="flex-1 pr-4">
                   <div className="flex items-center gap-2 mb-1">
                     <span className={`text-xs font-bold px-2 py-0.5 rounded ${
                       isCritical ? 'bg-red-500/20 text-red-400' : 'bg-orange-500/20 text-orange-400'
@@ -77,8 +93,11 @@ const GrievanceFeed = () => {
                   </p>
                 </div>
 
-                <button className="hidden md:flex items-center gap-1 text-[#FF9933] text-xs font-bold border border-[#FF9933]/30 px-3 py-1.5 rounded hover:bg-[#FF9933] hover:text-black transition-colors">
-                  Action <ArrowRight size={12} />
+                <button 
+                  onClick={() => handleAssign(item)}
+                  className="hidden md:flex items-center gap-1 text-[#FF9933] text-xs font-bold border border-[#FF9933]/30 px-3 py-1.5 rounded hover:bg-[#FF9933] hover:text-black transition-colors"
+                >
+                  Assign <Share2 size={12} />
                 </button>
               </div>
             );
