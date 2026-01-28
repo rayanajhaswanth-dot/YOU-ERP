@@ -36,9 +36,17 @@ const GrievanceFeed = () => {
       
       if (response.ok) {
         const data = await response.json();
-        // Filter for Critical/High priority for the Feed
+        
+        // CTO FIX: Filter Logic Update
+        // We now check TWO conditions:
+        // 1. Priority must be CRITICAL or HIGH
+        // 2. Status must NOT be 'Resolved' or 'RESOLVED' (We only want active fires)
         const criticalData = Array.isArray(data) 
-          ? data.filter(t => t.priority_level === 'CRITICAL' || t.priority_level === 'HIGH')
+          ? data.filter(t => 
+              (t.priority_level === 'CRITICAL' || t.priority_level === 'HIGH') && 
+              t.status !== 'Resolved' && 
+              t.status !== 'RESOLVED'
+            )
           : [];
         setGrievances(criticalData);
       }
