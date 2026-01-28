@@ -378,8 +378,7 @@ async def process_whatsapp_message(
                 
                 # Update the grievance status to RESOLVED
                 update_result = supabase.table("grievances").update({
-                    "status": "RESOLVED",
-                    "resolved_at": datetime.now(timezone.utc).isoformat()
+                    "status": "RESOLVED"
                 }).eq("id", ticket_id).execute()
                 
                 if update_result.data:
