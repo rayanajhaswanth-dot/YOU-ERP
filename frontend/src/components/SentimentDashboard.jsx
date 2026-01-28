@@ -13,24 +13,29 @@ const SentimentDashboard = () => {
   useEffect(() => {
     const fetchIntel = async () => {
       try {
-        // WORLD-CLASS PERFORMANCE: Fetch both data streams in parallel
+        // WORLD-CLASS ARCHITECTURE: Use relative paths for production stability
+        // This works in Dev (via Proxy) and Prod automatically.
         const [socialRes, grievanceRes] = await Promise.all([
-            fetch('http://localhost:8000/api/social/dashboard'),
-            fetch('http://localhost:8000/api/dashboard/grievances')
+            fetch('/api/social/dashboard'),
+            fetch('/api/dashboard/grievances')
         ]);
 
         const socialData = socialRes.ok ? await socialRes.json() : [];
         const grievanceData = grievanceRes.ok ? await grievanceRes.json() : [];
 
         // 1. PROCESS SENTIMENT (The "Feeling")
+        // Filter out null/undefined items before mapping to prevent crashes
+        const validSocialData = Array.isArray(socialData) ? socialData.filter(item => item) : [];
+        
         // Reverse to show Oldest -> Newest timeline
-        const processedChart = Array.isArray(socialData) ? socialData.reverse().map(item => ({
+        const processedChart = validSocialData.slice().reverse().map(item => ({
           name: item.report_date ? new Date(item.report_date).toLocaleDateString(undefined, { weekday: 'short' }) : 'Day',
           score: (item.positive_count || 0) - (item.negative_count || 0), // Net Score
           positive: item.positive_count || 0,
           negative: item.negative_count || 0,
+          neutral: item.neutral_count || 0,
           isSpike: item.spike_detected === true
-        })) : [];
+        }));
         
         setSentimentData(processedChart);
 
@@ -45,7 +50,7 @@ const SentimentDashboard = () => {
             const issues = {};
             const locations = {};
             
-            grievanceData.forEach(g => {
+            grievanceData.filter(g => g).forEach(g => {
                 const type = g.issue_type || "Infrastructure";
                 const loc = g.village || "Unknown Area";
                 issues[type] = (issues[type] || 0) + 1;
@@ -56,7 +61,7 @@ const SentimentDashboard = () => {
             const sortedIssues = Object.entries(issues).sort((a,b) => b[1] - a[1]);
             const sortedLocs = Object.entries(locations).sort((a,b) => b[1] - a[1]);
             
-            // Safe Assignment (Check if array has items)
+            // Safe Assignment
             if (sortedIssues.length > 0) setTopIssue(sortedIssues[0][0]);
             if (sortedLocs.length > 0) setTopLocation(sortedLocs[0][0]);
         }
@@ -82,11 +87,16 @@ const SentimentDashboard = () => {
   }, []);
 
   // METRIC CALCULATION
-  const latest = sentimentData.length > 0 ? sentimentData[sentimentData.length - 1] : { positive: 0, negative: 0 };
-  const total = (latest.positive || 0) + (latest.negative || 0) + (latest.neutral || 0); // Include neutral for correct total
+  // Robust Fallback: explicit 0s for all fields
+  const latest = sentimentData.length > 0 
+    ? sentimentData[sentimentData.length - 1] 
+    : { positive: 0, negative: 0, neutral: 0 };
+    
+  const total = (latest.positive || 0) + (latest.negative || 0) + (latest.neutral || 0);
+  
   // Approval Rating Calculation (Safe Division)
   // Default to 50% if no data to avoid "0%" shock
-  const approval = total > 0 ? Math.round((latest.positive / total) * 100) : 50;
+  const approval = total > 0 ? Math.round(((latest.positive || 0) / total) * 100) : 50;
   
   // Logic for Alert State
   const isCritical = spikeDetected || approval < 40;
