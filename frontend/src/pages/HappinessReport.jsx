@@ -211,10 +211,10 @@ export default function HappinessReport({ user }) {
       <div className="executive-card p-8" data-testid="recent-mentions">
         <h3 className="text-2xl font-semibold text-slate-50 mb-6">Recent Mentions</h3>
         <div className="space-y-4">
-          {sentimentData.length === 0 ? (
+          {(!sentimentData || sentimentData.length === 0) ? (
             <p className="text-slate-400 text-center py-8">No sentiment data available yet</p>
           ) : (
-            sentimentData.slice(0, 10).map((item, idx) => {
+            sentimentData.filter(item => item && typeof item === 'object').slice(0, 10).map((item, idx) => {
               // Safe score extraction
               const score = Number(item?.sentiment_score) || 0;
               return (
