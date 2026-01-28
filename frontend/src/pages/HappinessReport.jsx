@@ -214,25 +214,29 @@ export default function HappinessReport({ user }) {
           {sentimentData.length === 0 ? (
             <p className="text-slate-400 text-center py-8">No sentiment data available yet</p>
           ) : (
-            sentimentData.slice(0, 10).map((item, idx) => (
-              <div
-                key={idx}
-                className="bg-slate-950 rounded-2xl p-4 border border-slate-800"
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs uppercase tracking-wider text-slate-500">
-                    {item.platform} • {item.issue_category}
-                  </span>
-                  <span className={`text-sm font-semibold ${
-                    item.sentiment_score > 0.6 ? 'text-emerald-400' :
-                    item.sentiment_score < 0.4 ? 'text-rose-400' : 'text-amber-400'
-                  }`}>
-                    Score: {item.sentiment_score.toFixed(2)}
-                  </span>
+            sentimentData.slice(0, 10).map((item, idx) => {
+              // Safe score extraction
+              const score = Number(item?.sentiment_score) || 0;
+              return (
+                <div
+                  key={idx}
+                  className="bg-slate-950 rounded-2xl p-4 border border-slate-800"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs uppercase tracking-wider text-slate-500">
+                      {item?.platform || 'Unknown'} • {item?.issue_category || 'General'}
+                    </span>
+                    <span className={`text-sm font-semibold ${
+                      score > 0.6 ? 'text-emerald-400' :
+                      score < 0.4 ? 'text-rose-400' : 'text-amber-400'
+                    }`}>
+                      Score: {score.toFixed(2)}
+                    </span>
+                  </div>
+                  <p className="text-slate-300 text-sm">{item?.content || 'No content'}</p>
                 </div>
-                <p className="text-slate-300 text-sm">{item.content}</p>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </div>
