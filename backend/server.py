@@ -24,7 +24,7 @@ except Exception:
     except Exception as e:
         print(f"Warning: Could not auto-download corpora. Sentiment analysis might vary. Error: {e}")
 
-from routes import auth_routes, grievance_routes, posts_routes, analytics_routes, ai_routes, whatsapp_routes, verification_routes, social_routes, dashboard_routes
+from routes import auth_routes, grievance_routes, posts_routes, analytics_routes, ai_routes, whatsapp_routes, verification_routes, social_routes, dashboard_routes, tickets_routes
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
