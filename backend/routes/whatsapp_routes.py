@@ -367,14 +367,17 @@ async def process_whatsapp_message(
         # ============================================================
         # CTO UPDATE: TICKET CLOSURE LOGIC (Step 5)
         # When clerk/OSD sends "Fixed_UUID", auto-resolve the ticket
+        # Improved error handling per CTO specification
         # ============================================================
         if message.lower().startswith("fixed_"):
             try:
-                # Format: Fixed_UUID-GOES-HERE
-                ticket_id = message.split("_", 1)[1].strip()
+                parts = message.split("_")
+                if len(parts) < 2:
+                    return "❌ Invalid format. Please use the link provided."
                 
+                ticket_id = parts[1].strip()
                 if not ticket_id:
-                    return "❌ Invalid format. Please use: Fixed_<ticket-id>"
+                    return "❌ Ticket ID missing from command."
                 
                 # Update the grievance status to RESOLVED
                 update_result = supabase.table("grievances").update({
@@ -383,21 +386,21 @@ async def process_whatsapp_message(
                 
                 if update_result.data:
                     ticket_info = update_result.data[0]
-                    short_id = ticket_id[:8]
+                    short_id = ticket_id[:5]
                     issue_type = ticket_info.get('issue_type', 'Issue')
                     
                     print(f"✅ [TICKET CLOSURE] Ticket {ticket_id} marked as RESOLVED by {phone}")
                     
-                    return f"✅ Ticket #{short_id} marked as RESOLVED!\n\n" \
+                    return f"✅ Ticket #{short_id} marked as RESOLVED. Great work!\n\n" \
                            f"📋 Issue: {issue_type}\n" \
-                           f"🕐 Closed: {datetime.now().strftime('%d %b %Y, %H:%M')}\n\n" \
-                           f"Great work! The citizen will be notified."
+                           f"🕐 Closed: {datetime.now().strftime('%d %b %Y, %H:%M')}"
                 else:
-                    return f"❌ Could not find ticket with ID: {ticket_id[:8]}...\n\nPlease verify the ticket link and try again."
+                    return "❌ Could not find that ticket ID. It may vary or be invalid."
                     
             except Exception as e:
                 print(f"❌ [TICKET CLOSURE ERROR] {e}")
-                return "❌ Error processing ticket closure. Please try again or contact support."
+                # Likely an invalid UUID format
+                return "❌ Error: Invalid Ticket ID format."
         
         # ============================================================
         # MULTIMODAL ORCHESTRATOR (V6) - Discrete Input Handling
