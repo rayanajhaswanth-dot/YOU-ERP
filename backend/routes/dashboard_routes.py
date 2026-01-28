@@ -92,6 +92,10 @@ async def draft_post(req: DraftRequest):
         twitter = f"✊ {topic}. This is the change we promised! #Development #Progress #ConstituencyFirst"
         whatsapp = f"✊ Jai Hind!\n\n{topic}\n\nThis is the development we promised. More to come!\n\n- Your Leader"
         facebook = f"DEVELOPMENT UPDATE\n\n{topic}\n\nWhen we made promises, we meant them. This is just the beginning of the transformation we envisioned for our constituency."
+    elif tone == "festive":
+        twitter = f"🎉 {topic}! Wishing everyone joy and prosperity. May this occasion bring happiness to all! 🪔✨ #Celebration #Blessings"
+        whatsapp = f"🎊 Warm Greetings!\n\n{topic}\n\nMay this auspicious occasion bring joy, peace and prosperity to you and your family.\n\n🙏 Your Sevak"
+        facebook = f"🎉 FESTIVE GREETINGS 🎉\n\n{topic}\n\nOn this joyous occasion, I extend my heartfelt wishes to all citizens. May this celebration strengthen the bonds of our community and bring happiness to every home.\n\nWith warm regards and best wishes! 🪔"
     else:  # professional (default)
         twitter = f"📢 UPDATE: {topic}. We remain committed to progress. #ConstituencyFirst #GoodGovernance"
         whatsapp = f"🙏 Namaste,\n\nImportant Update:\n\n{topic}\n\nThank you for your continued support.\n\n- Your Sevak"
