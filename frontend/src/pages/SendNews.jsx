@@ -257,7 +257,6 @@ const SendNews = () => {
           </Card>
         </div>
       </div>
-    </Layout>
   );
 };
 
