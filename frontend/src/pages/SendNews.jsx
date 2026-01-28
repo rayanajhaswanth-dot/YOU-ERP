@@ -1,312 +1,266 @@
-import React, { useState, useEffect } from 'react';
-import axios from 'axios';
-import { motion } from 'framer-motion';
-import { toast } from 'sonner';
-import { Button } from '../components/ui/button';
-import { Textarea } from '../components/ui/textarea';
-import { Badge } from '../components/ui/badge';
-import { Send, Loader2, CheckCircle, Clock, Sparkles } from 'lucide-react';
+import React, { useState } from 'react';
+import Layout from '../components/Layout';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../components/ui/card";
+import { Button } from "../components/ui/button";
+import { Textarea } from "../components/ui/textarea";
+import { Input } from "../components/ui/input";
+import { Checkbox } from "../components/ui/checkbox";
+import { Label } from "../components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
+import { Megaphone, Sparkles, Loader2, Send, Image as ImageIcon } from "lucide-react";
+import { useToast } from "../hooks/use-toast";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
-export default function SendNews({ user }) {
-  const [posts, setPosts] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
+const SendNews = () => {
+  const [topic, setTopic] = useState('');
   const [content, setContent] = useState('');
-  const [polishing, setPolishing] = useState(false);
-  const [polishedVersions, setPolishedVersions] = useState(null);
-  const [selectedPlatforms, setSelectedPlatforms] = useState([]);
+  const [tone, setTone] = useState('professional');
+  const [loading, setLoading] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const [image, setImage] = useState(null);
+  
+  // Platform Selection State
+  const [platforms, setPlatforms] = useState({
+    facebook: false,
+    twitter: false,
+    whatsapp: false
+  });
 
-  useEffect(() => {
-    fetchPosts();
-  }, []);
+  const { toast } = useToast();
 
-  const fetchPosts = async () => {
+  const handleGenerate = async () => {
+    if (!topic) return;
+    setLoading(true);
+
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get(`${BACKEND_URL}/api/posts/`, {
-        headers: { Authorization: `Bearer ${token}` }
+      
+      const response = await fetch(`${BACKEND_URL}/api/dashboard/draft`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ topic, tone }),
       });
-      setPosts(response.data);
+
+      if (!response.ok) throw new Error("AI Generation failed");
+
+      const data = await response.json();
+      // For the unified box, we default to the Facebook (Long) version
+      setContent(data.facebook || data.twitter);
+      
+      toast({ title: "Draft Generated", description: "Content ready for review." });
     } catch (error) {
-      console.error('Error fetching posts:', error);
-      toast.error('Failed to load posts');
+      toast({ variant: "destructive", title: "Error", description: "AI drafting failed." });
     } finally {
       setLoading(false);
     }
   };
 
-  const handlePolish = async () => {
-    if (!content.trim()) {
-      toast.error('Please enter some content first');
+  const handleBroadcast = async () => {
+    if (!content) return;
+    if (!platforms.facebook && !platforms.twitter && !platforms.whatsapp) {
+      toast({ variant: "destructive", title: "Select a Platform", description: "Choose at least one destination." });
       return;
     }
 
-    setPolishing(true);
-    try {
-      const token = localStorage.getItem('token');
-      const response = await axios.post(
-        `${BACKEND_URL}/api/ai/polish-post`,
-        { prompt: content },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      setPolishedVersions(response.data.polished_versions);
-      toast.success('AI polished your post!');
-    } catch (error) {
-      console.error('Error polishing post:', error);
-      toast.error('Failed to polish post');
-    } finally {
-      setPolishing(false);
+    setPublishing(true);
+    const token = localStorage.getItem('token');
+
+    // 1. FACEBOOK (API Post with Image Support)
+    if (platforms.facebook) {
+      try {
+        const formData = new FormData();
+        formData.append('content', content);
+        formData.append('platform', 'facebook');
+        if (image) formData.append('image', image);
+
+        const response = await fetch(`${BACKEND_URL}/api/posts/publish`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` },
+          body: formData
+        });
+
+        if (!response.ok) {
+          if (response.status === 503) {
+            // Fallback: Copy to clipboard and open Facebook
+            navigator.clipboard.writeText(content);
+            window.open("https://facebook.com", '_blank');
+            toast({ title: "Copied to Clipboard", description: "FB credentials missing. Paste manually." });
+          } else {
+            throw new Error("FB API Error");
+          }
+        } else {
+          toast({ className: "bg-green-600 text-white border-none", title: "Facebook", description: "Published successfully!" });
+        }
+      } catch (e) {
+        navigator.clipboard.writeText(content);
+        window.open("https://facebook.com", '_blank');
+        toast({ title: "Copied to Clipboard", description: "Opening Facebook for manual posting." });
+      }
     }
+
+    // 2. TWITTER (Intent Link)
+    if (platforms.twitter) {
+      const text = encodeURIComponent(content.substring(0, 280)); // Truncate for X
+      window.open(`https://twitter.com/intent/tweet?text=${text}`, '_blank');
+      toast({ title: "Opening Twitter", description: "Complete your post in the new window." });
+    }
+
+    // 3. WHATSAPP (Intent Link)
+    if (platforms.whatsapp) {
+      const text = encodeURIComponent(content);
+      window.open(`https://wa.me/?text=${text}`, '_blank');
+      toast({ title: "Opening WhatsApp", description: "Select contacts to share with." });
+    }
+
+    setPublishing(false);
   };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-
-    if (selectedPlatforms.length === 0) {
-      toast.error('Please select at least one platform');
-      return;
-    }
-
-    try {
-      const token = localStorage.getItem('token');
-      await axios.post(
-        `${BACKEND_URL}/api/posts/`,
-        {
-          content,
-          platforms: selectedPlatforms
-        },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-
-      toast.success('Post created successfully');
-      setShowForm(false);
-      setContent('');
-      setSelectedPlatforms([]);
-      setPolishedVersions(null);
-      fetchPosts();
-    } catch (error) {
-      console.error('Error creating post:', error);
-      toast.error('Failed to create post');
-    }
-  };
-
-  const approvePost = async (postId) => {
-    try {
-      const token = localStorage.getItem('token');
-      await axios.post(
-        `${BACKEND_URL}/api/posts/${postId}/approve`,
-        {},
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      toast.success('Post approved!');
-      fetchPosts();
-    } catch (error) {
-      console.error('Error approving post:', error);
-      toast.error('Failed to approve post');
-    }
-  };
-
-  const platforms = [
-    { id: 'whatsapp', name: 'WhatsApp', color: 'text-emerald-400' },
-    { id: 'twitter', name: 'Twitter/X', color: 'text-sky-400' },
-    { id: 'instagram', name: 'Instagram', color: 'text-pink-400' },
-    { id: 'facebook', name: 'Facebook', color: 'text-blue-400' }
-  ];
-
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'draft':
-        return 'bg-slate-500/10 text-slate-400 border-slate-500/20';
-      case 'approved':
-        return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
-      case 'published':
-        return 'bg-sky-500/10 text-sky-400 border-sky-500/20';
-      default:
-        return 'bg-slate-500/10 text-slate-400 border-slate-500/20';
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <Loader2 className="h-8 w-8 animate-spin text-orange-500" />
-      </div>
-    );
-  }
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="space-y-8"
-      data-testid="send-news-page"
-    >
-      <div className="flex items-center justify-between">
+    <Layout>
+      <div className="p-6 space-y-6">
         <div>
-          <h1 className="text-5xl font-bold text-slate-50 tracking-tight mb-2" style={{ fontFamily: 'Manrope' }}>
-            Send News
-          </h1>
-          <p className="text-slate-400 text-lg">Broadcast center for multi-platform posts</p>
+          <h1 className="text-3xl font-bold text-white mb-2">Send News & Updates</h1>
+          <p className="text-slate-400">The centralized broadcasting console for all channels.</p>
         </div>
-        <Button
-          onClick={() => setShowForm(!showForm)}
-          data-testid="create-post-button"
-          className="bg-orange-500 hover:bg-orange-600 text-white font-semibold rounded-full px-8 py-3 pill-button"
-        >
-          <Send className="h-4 w-4 mr-2" />
-          Create Post
-        </Button>
-      </div>
 
-      {showForm && (
-        <motion.div
-          initial={{ opacity: 0, height: 0 }}
-          animate={{ opacity: 1, height: 'auto' }}
-          className="executive-card p-8"
-          data-testid="post-form"
-        >
-          <h3 className="text-2xl font-semibold text-slate-50 mb-6">Create Multi-Platform Post</h3>
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">Post Content</label>
-              <Textarea
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* LEFT: Drafting Engine */}
+          <Card className="md:col-span-2 border-orange-500/20 bg-slate-900/50 backdrop-blur">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-orange-500" /> Content Creator
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex gap-2">
+                <Input 
+                  placeholder="Topic (e.g., 'New park opening ceremony')" 
+                  value={topic}
+                  onChange={(e) => setTopic(e.target.value)}
+                  className="bg-slate-950 border-slate-800 text-white"
+                  data-testid="news-topic-input"
+                />
+                 <Select value={tone} onValueChange={setTone}>
+                  <SelectTrigger className="w-[140px] bg-slate-950 border-slate-800 text-white" data-testid="news-tone-select">
+                    <SelectValue placeholder="Tone" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="professional">Professional</SelectItem>
+                    <SelectItem value="political">Political</SelectItem>
+                    <SelectItem value="urgent">Urgent</SelectItem>
+                    <SelectItem value="empathetic">Empathetic</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button 
+                  onClick={handleGenerate} 
+                  disabled={loading || !topic} 
+                  className="bg-orange-600 hover:bg-orange-700"
+                  data-testid="news-draft-btn"
+                >
+                  {loading ? <Loader2 className="animate-spin" /> : "Draft"}
+                </Button>
+              </div>
+
+              <Textarea 
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
-                data-testid="post-content-textarea"
-                className="bg-slate-950 border-slate-800 focus:border-orange-500 rounded-xl text-slate-200 min-h-[150px]"
-                placeholder="Write your message..."
-                required
+                className="min-h-[200px] bg-slate-950 border-slate-800 text-white text-base"
+                placeholder="Your post content will appear here. You can also type directly..."
+                data-testid="news-content-textarea"
               />
-            </div>
 
-            <Button
-              type="button"
-              onClick={handlePolish}
-              disabled={polishing}
-              data-testid="polish-button"
-              className="bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 rounded-full px-6 pill-button"
-            >
-              {polishing ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  AI Polishing...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="mr-2 h-4 w-4" />
-                  Polish with AI
-                </>
-              )}
-            </Button>
+              <div className="flex items-center gap-4 p-4 border border-slate-800 rounded-lg bg-slate-950/50">
+                 <div className="bg-slate-800 p-2 rounded-full">
+                    <ImageIcon className="h-6 w-6 text-slate-400" />
+                 </div>
+                 <div className="flex-1">
+                   <Label htmlFor="image-upload" className="cursor-pointer text-sm font-medium text-slate-300 hover:text-orange-400">
+                     {image ? image.name : "Upload Image / Reel (Optional)"}
+                   </Label>
+                   <Input 
+                     id="image-upload" 
+                     type="file" 
+                     className="hidden" 
+                     accept="image/*,video/*"
+                     onChange={(e) => setImage(e.target.files[0])}
+                     data-testid="news-image-upload"
+                   />
+                 </div>
+                 {image && (
+                   <Button variant="ghost" size="sm" onClick={() => setImage(null)} className="text-red-400 hover:text-red-300">
+                     Remove
+                   </Button>
+                 )}
+              </div>
+            </CardContent>
+          </Card>
 
-            {polishedVersions && (
-              <div className="bg-slate-950 rounded-2xl p-6 border border-purple-500/20">
-                <p className="text-sm uppercase tracking-wider text-purple-400 mb-3">AI-Polished Versions</p>
-                <div className="text-slate-300 leading-relaxed whitespace-pre-wrap">
-                  {polishedVersions}
+          {/* RIGHT: Distribution Control */}
+          <Card className="border-orange-500/20 bg-slate-900/50 backdrop-blur">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Megaphone className="h-5 w-5 text-orange-500" /> Distribution
+              </CardTitle>
+              <CardDescription>Select platforms to blast.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="space-y-4">
+                <div className="flex items-center space-x-3 p-3 border border-slate-800 rounded bg-slate-950">
+                  <Checkbox 
+                    id="fb" 
+                    checked={platforms.facebook} 
+                    onCheckedChange={(c) => setPlatforms(prev => ({...prev, facebook: c}))} 
+                    data-testid="platform-facebook"
+                  />
+                  <Label htmlFor="fb" className="flex items-center gap-2 text-white cursor-pointer">
+                    <span className="text-blue-500 font-bold">f</span> Facebook Page
+                  </Label>
+                </div>
+
+                <div className="flex items-center space-x-3 p-3 border border-slate-800 rounded bg-slate-950">
+                  <Checkbox 
+                    id="tw" 
+                    checked={platforms.twitter} 
+                    onCheckedChange={(c) => setPlatforms(prev => ({...prev, twitter: c}))} 
+                    data-testid="platform-twitter"
+                  />
+                  <Label htmlFor="tw" className="flex items-center gap-2 text-white cursor-pointer">
+                    <span className="text-sky-500 font-bold">X</span> Twitter / X
+                  </Label>
+                </div>
+
+                <div className="flex items-center space-x-3 p-3 border border-slate-800 rounded bg-slate-950">
+                  <Checkbox 
+                    id="wa" 
+                    checked={platforms.whatsapp} 
+                    onCheckedChange={(c) => setPlatforms(prev => ({...prev, whatsapp: c}))} 
+                    data-testid="platform-whatsapp"
+                  />
+                  <Label htmlFor="wa" className="flex items-center gap-2 text-white cursor-pointer">
+                    <span className="text-green-500 font-bold">WA</span> WhatsApp
+                  </Label>
                 </div>
               </div>
-            )}
 
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-3">Select Platforms</label>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                {platforms.map((platform) => (
-                  <button
-                    key={platform.id}
-                    type="button"
-                    onClick={() => {
-                      if (selectedPlatforms.includes(platform.id)) {
-                        setSelectedPlatforms(selectedPlatforms.filter((p) => p !== platform.id));
-                      } else {
-                        setSelectedPlatforms([...selectedPlatforms, platform.id]);
-                      }
-                    }}
-                    data-testid={`platform-${platform.id}`}
-                    className={`p-4 rounded-2xl border-2 transition-all ${
-                      selectedPlatforms.includes(platform.id)
-                        ? 'border-orange-500 bg-orange-500/10'
-                        : 'border-slate-800 bg-slate-950 hover:border-slate-700'
-                    }`}
-                  >
-                    <span className={`font-medium ${platform.color}`}>{platform.name}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="flex gap-4">
-              <Button
-                type="submit"
-                data-testid="submit-post-button"
-                className="bg-orange-500 hover:bg-orange-600 text-white font-semibold rounded-full px-8 pill-button"
+              <Button 
+                className="w-full h-12 text-lg font-bold bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 shadow-lg shadow-orange-900/20"
+                onClick={handleBroadcast}
+                disabled={publishing || !content}
+                data-testid="broadcast-now-btn"
               >
-                Create Post
+                {publishing ? <Loader2 className="mr-2 animate-spin" /> : <Send className="mr-2" />}
+                {publishing ? "Broadcasting..." : "BROADCAST NOW"}
               </Button>
-              <Button
-                type="button"
-                onClick={() => {
-                  setShowForm(false);
-                  setContent('');
-                  setSelectedPlatforms([]);
-                  setPolishedVersions(null);
-                }}
-                className="bg-slate-800 hover:bg-slate-700 text-white rounded-full px-8 pill-button"
-              >
-                Cancel
-              </Button>
-            </div>
-          </form>
-        </motion.div>
-      )}
-
-      <div className="executive-card p-8" data-testid="posts-list">
-        <h3 className="text-2xl font-semibold text-slate-50 mb-6">Recent Posts</h3>
-        <div className="space-y-4">
-          {posts.length === 0 ? (
-            <p className="text-slate-400 text-center py-8">No posts created yet</p>
-          ) : (
-            posts.map((post) => (
-              <motion.div
-                key={post.id}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                data-testid={`post-${post.id}`}
-                className="bg-slate-950 rounded-2xl p-6 border border-slate-800 hover:border-orange-500/30 transition-colors"
-              >
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-3">
-                      <Badge className={getStatusColor(post.status)}>
-                        {post.status}
-                      </Badge>
-                      {post.platforms && post.platforms.map((platform) => (
-                        <Badge key={platform} variant="outline" className="text-slate-400 border-slate-700">
-                          {platform}
-                        </Badge>
-                      ))}
-                    </div>
-                    <p className="text-slate-300">{post.content}</p>
-                  </div>
-                </div>
-                {user?.role === 'politician' && post.status === 'draft' && (
-                  <Button
-                    onClick={() => approvePost(post.id)}
-                    data-testid={`approve-post-${post.id}`}
-                    size="sm"
-                    className="bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 rounded-full pill-button"
-                  >
-                    <CheckCircle className="h-3 w-3 mr-1" />
-                    Approve
-                  </Button>
-                )}
-              </motion.div>
-            ))
-          )}
+            </CardContent>
+          </Card>
         </div>
       </div>
-    </motion.div>
+    </Layout>
   );
-}
+};
+
+export default SendNews;
