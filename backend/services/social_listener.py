@@ -1,6 +1,6 @@
 import random
 from textblob import TextBlob
-from datetime import datetime
+from datetime import datetime, date
 from database import supabase
 
 # Mock Comments to simulate "Listening" to the public
@@ -28,37 +28,46 @@ async def fetch_and_analyze_social_feed():
     print("🔄 [Social Listener] Tuning into public sentiment...")
     
     # 1. Simulate fetching 3 random comments
-    # We randomize to simulate dynamic feed updates
     new_comments = random.sample(MOCK_COMMENTS, 3)
     
-    results = []
+    # Count sentiments
+    positive_count = 0
+    negative_count = 0
+    neutral_count = 0
+    total_score = 0.0
     
     for comment in new_comments:
         # 2. Analyze (Local Python TextBlob)
         blob = TextBlob(comment)
-        score = blob.sentiment.polarity # Returns float: -1.0 (Bad) to 1.0 (Good)
+        score = blob.sentiment.polarity  # Returns float: -1.0 (Bad) to 1.0 (Good)
+        total_score += score
         
-        # Determine Platform (Random for simulation)
-        platform = random.choice(["facebook", "twitter", "whatsapp"])
-        
-        data = {
-            "platform": platform,
-            "sentiment_score": score,
-            "mention_count": 1,
-            "recorded_at": datetime.now().isoformat()
-        }
-        
-        # 3. Store in DB
-        try:
-            # Insert into the 'sentiment_analytics' table created in schema
-            response = supabase.table("sentiment_analytics").insert(data).execute()
-            results.append(data)
-        except Exception as e:
-            print(f"❌ [Social Listener] DB Error: {e}")
-
-    # Log summary for server console
-    if results:
-        avg_score = sum(r['sentiment_score'] for r in results) / len(results)
-        print(f"✅ [Social Listener] Processed {len(results)} comments. Avg Sentiment: {avg_score:.2f}")
-    else:
-        print("⚠️ [Social Listener] No data processed.")
+        # Categorize sentiment
+        if score > 0.1:
+            positive_count += 1
+        elif score < -0.1:
+            negative_count += 1
+        else:
+            neutral_count += 1
+    
+    # Determine Platform (Random for simulation)
+    platform = random.choice(["facebook", "twitter", "whatsapp"])
+    
+    # Build data matching the actual schema
+    data = {
+        "platform": platform,
+        "report_date": date.today().isoformat(),
+        "positive_count": positive_count,
+        "negative_count": negative_count,
+        "neutral_count": neutral_count,
+        "sentiment_score": total_score / len(new_comments) if new_comments else 0,
+        "content": " | ".join(new_comments[:2])  # Store sample comments
+    }
+    
+    # 3. Store in DB
+    try:
+        response = supabase.table("sentiment_analytics").insert(data).execute()
+        avg_score = data["sentiment_score"]
+        print(f"✅ [Social Listener] Processed {len(new_comments)} comments. Avg Sentiment: {avg_score:.2f} (👍{positive_count} 👎{negative_count} 😐{neutral_count})")
+    except Exception as e:
+        print(f"❌ [Social Listener] DB Error: {e}")
