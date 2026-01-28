@@ -1,35 +1,56 @@
-import React, { useState, useEffect } from 'react';
-import { AlertTriangle, MapPin, CheckCircle, Share2 } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Card, CardHeader, CardTitle, CardContent } from "./ui/card";
+import { Badge } from "./ui/badge";
+import { Button } from "./ui/button";
+import { ScrollArea } from "./ui/scroll-area";
+import { AlertTriangle, Clock, MapPin, Send, CheckCircle, Loader2 } from "lucide-react";
+import { toast } from 'sonner';
+
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
 const GrievanceFeed = () => {
   const [grievances, setGrievances] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchGrievances = async () => {
-      try {
-        const response = await fetch('/api/dashboard/grievances');
-        if (response.ok) {
-          const data = await response.json();
-          // Safety check to ensure we always have an array
-          setGrievances(Array.isArray(data) ? data : []);
-        } else {
-          setGrievances([]);
-        }
-      } catch (err) {
-        console.error("Feed Error:", err);
-        setGrievances([]);
-      } finally {
-        setLoading(false);
-      }
-    };
+  // CTO UPDATE: RBAC LOGIC
+  // Retrieve role to determine if user can manage tickets
+  const userRole = localStorage.getItem('user_role')?.toLowerCase() || 'citizen';
+  // CTO NOTE: Updated to include 'leader' and 'politician' per user request for write access
+  const canManage = ['osd', 'registrar', 'leader', 'politician'].includes(userRole);
 
+  useEffect(() => {
     fetchGrievances();
+    // Poll every 30 seconds for real-time updates
+    const interval = setInterval(fetchGrievances, 30000);
+    return () => clearInterval(interval);
   }, []);
+
+  const fetchGrievances = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${BACKEND_URL}/api/dashboard/grievances`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        // Filter for Critical/High priority for the Feed
+        const criticalData = Array.isArray(data) 
+          ? data.filter(t => t.priority_level === 'CRITICAL' || t.priority_level === 'HIGH')
+          : [];
+        setGrievances(criticalData);
+      }
+    } catch (error) {
+      console.error("Feed Error:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleAssign = (item) => {
     // PRD Feature B: Deep Link Assignment
-    // Generates a pre-filled WhatsApp message for the official
     const message = 
       `🚨 *URGENT TASK ASSIGNMENT*\n\n` +
       `*Issue:* ${item.issue_type || 'General Issue'}\n` +
@@ -38,73 +59,84 @@ const GrievanceFeed = () => {
       `*Description:* ${item.description}\n\n` +
       `Please resolve this immediately and share proof of completion.`;
 
-    // Opens WhatsApp Web or App with the drafted text
     const url = `https://wa.me/?text=${encodeURIComponent(message)}`;
     window.open(url, '_blank');
+    toast.success("Task Delegated - WhatsApp assignment link generated.");
   };
 
-  if (loading) return <div className="h-32 bg-[#1F2937] rounded-xl animate-pulse border border-gray-800"></div>;
-
   return (
-    <div className="w-full">
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-bold text-gray-100 flex items-center gap-2">
-          <AlertTriangle className="text-red-500" size={20} />
-          Critical Alerts
-        </h2>
-        <span className="text-xs text-gray-500 uppercase tracking-widest font-semibold">Real-Time</span>
-      </div>
-
-      <div className="space-y-3">
-        {grievances.length === 0 ? (
-          <div className="bg-[#1F2937] p-6 rounded-xl border border-green-900/30 flex items-center gap-3">
-            <CheckCircle className="text-green-500" size={24} />
-            <div>
-              <h3 className="text-green-400 font-bold">All Systems Nominal</h3>
-              <p className="text-sm text-gray-400">No critical issues pending attention.</p>
+    <Card className="col-span-1 h-[400px] flex flex-col border-orange-500/20 bg-slate-900/50 backdrop-blur">
+      <CardHeader className="pb-2">
+        <div className="flex justify-between items-center">
+          <CardTitle className="text-lg font-bold text-white flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5 text-red-500" />
+            Active Fires
+            <Badge variant="outline" className="ml-2 border-red-500/50 text-red-400">
+              {grievances.length} Critical
+            </Badge>
+          </CardTitle>
+          {/* CTO NOTE: Visual Indicator of Mode */}
+          {!canManage && (
+            <Badge variant="secondary" className="bg-slate-800 text-slate-400 text-xs">
+              View Only
+            </Badge>
+          )}
+        </div>
+      </CardHeader>
+      <CardContent className="flex-1 overflow-hidden p-0">
+        <ScrollArea className="h-full px-4 pb-4">
+          {loading ? (
+             <div className="flex justify-center items-center h-40">
+               <Loader2 className="h-6 w-6 animate-spin text-orange-500" />
+             </div>
+          ) : grievances.length === 0 ? (
+            <div className="text-center text-slate-500 mt-10">
+              <CheckCircle className="h-8 w-8 mx-auto mb-2 opacity-50" />
+              <p>No critical issues active.</p>
             </div>
-          </div>
-        ) : (
-          grievances.map((item, index) => {
-            const isCritical = item.priority_level === 'CRITICAL';
-            return (
-              <div 
-                key={item.id || index}
-                className={`bg-[#1F2937] p-4 rounded-lg border-l-4 flex justify-between items-center transition-all hover:bg-[#2d3748] ${
-                  isCritical ? 'border-red-500' : 'border-orange-500'
-                }`}
-              >
-                <div className="flex-1 pr-4">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className={`text-xs font-bold px-2 py-0.5 rounded ${
-                      isCritical ? 'bg-red-500/20 text-red-400' : 'bg-orange-500/20 text-orange-400'
-                    }`}>
-                      {item.priority_level || 'HIGH'}
-                    </span>
-                    <span className="text-gray-400 text-xs flex items-center gap-1">
-                      <MapPin size={10} /> {item.village || 'Unknown Location'}
-                    </span>
+          ) : (
+            <div className="space-y-3 pt-2">
+              {grievances.map((ticket, index) => (
+                <div key={ticket.id || index} className="p-3 rounded-lg border border-slate-800 bg-slate-950/50 hover:bg-slate-900 transition-colors">
+                  <div className="flex justify-between items-start mb-2">
+                    <div className="space-y-1">
+                      <h4 className="font-medium text-slate-200 text-sm">{ticket.issue_type || 'General Issue'}</h4>
+                      <div className="flex items-center gap-2 text-xs text-slate-400">
+                        <MapPin className="h-3 w-3" /> {ticket.village || ticket.location || "Unknown Loc"}
+                        <span className="text-slate-700">|</span>
+                        <Clock className="h-3 w-3" /> {ticket.created_at ? new Date(ticket.created_at).toLocaleDateString() : 'N/A'}
+                      </div>
+                    </div>
+                    <Badge className={
+                      ticket.priority_level === 'CRITICAL' ? "bg-red-900/30 text-red-400 border-red-900" : "bg-orange-900/30 text-orange-400 border-orange-900"
+                    }>
+                      {ticket.priority_level || 'HIGH'}
+                    </Badge>
                   </div>
-                  <h4 className="text-white font-bold text-sm md:text-base">
-                    {item.issue_type || 'General Issue'}
-                  </h4>
-                  <p className="text-gray-400 text-xs md:text-sm mt-1 line-clamp-1">
-                    {item.description}
-                  </p>
+                  
+                  <p className="text-xs text-slate-500 line-clamp-2 mb-2">{ticket.description}</p>
+                  
+                  {/* CTO UPDATE: Only OSD/Registrar/Leader/Politician can see these buttons */}
+                  {canManage && (
+                    <div className="flex gap-2 mt-3">
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        className="w-full h-8 text-xs border-orange-500/30 text-orange-400 hover:bg-orange-950"
+                        onClick={() => handleAssign(ticket)}
+                        data-testid={`assign-btn-${ticket.id}`}
+                      >
+                        <Send className="h-3 w-3 mr-1" /> Assign Officer
+                      </Button>
+                    </div>
+                  )}
                 </div>
-
-                <button 
-                  onClick={() => handleAssign(item)}
-                  className="hidden md:flex items-center gap-1 text-[#FF9933] text-xs font-bold border border-[#FF9933]/30 px-3 py-1.5 rounded hover:bg-[#FF9933] hover:text-black transition-colors"
-                >
-                  Assign <Share2 size={12} />
-                </button>
-              </div>
-            );
-          })
-        )}
-      </div>
-    </div>
+              ))}
+            </div>
+          )}
+        </ScrollArea>
+      </CardContent>
+    </Card>
   );
 };
 
