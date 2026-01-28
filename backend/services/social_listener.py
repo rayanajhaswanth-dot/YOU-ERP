@@ -52,21 +52,19 @@ async def fetch_and_analyze_social_feed():
     
     # Determine Platform (Random for simulation)
     platform = random.choice(["facebook", "twitter", "whatsapp"])
+    avg_score = total_score / len(new_comments) if new_comments else 0
     
-    # Build data matching the actual schema
+    # Build data - use only basic columns that should exist
+    # Note: Full functionality requires DB migration to be applied
     data = {
-        "platform": platform,
-        "report_date": date.today().isoformat(),
-        "positive_count": positive_count,
-        "negative_count": negative_count,
-        "neutral_count": neutral_count,
-        "sentiment_score": total_score / len(new_comments) if new_comments else 0
+        "platform": platform
     }
     
     # 3. Store in DB
     try:
         response = supabase.table("sentiment_analytics").insert(data).execute()
-        avg_score = data["sentiment_score"]
         print(f"✅ [Social Listener] Processed {len(new_comments)} comments. Avg Sentiment: {avg_score:.2f} (👍{positive_count} 👎{negative_count} 😐{neutral_count})")
+        print("⚠️  Note: Full data storage requires DB schema migration. Only platform stored.")
     except Exception as e:
         print(f"❌ [Social Listener] DB Error: {e}")
+        print("💡 Hint: Run the schema migration SQL in Supabase SQL Editor to enable full functionality.")
