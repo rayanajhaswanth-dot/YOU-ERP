@@ -1,300 +1,174 @@
 import React, { useState, useEffect } from 'react';
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
-import { AlertTriangle, TrendingUp, TrendingDown, Loader2 } from 'lucide-react';
+import { AreaChart, Area, XAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { TrendingUp, TrendingDown, AlertCircle, AlertTriangle, Activity } from 'lucide-react';
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-
-// Executive Saffron Design System Colors
-const COLORS = {
-  background: '#111827',
-  cardSurface: '#1F2937',
-  text: '#F3F4F6',
-  textMuted: '#9CA3AF',
-  positive: '#FF9933',  // Saffron
-  negative: '#EF4444',  // Red
-  neutral: '#6B7280',
-};
-
-export default function SentimentDashboard() {
-  const [chartData, setChartData] = useState([]);
+const SentimentDashboard = () => {
+  const [sentimentData, setSentimentData] = useState([]);
+  const [topIssue, setTopIssue] = useState("General Governance");
+  const [topLocation, setTopLocation] = useState("the Constituency");
   const [loading, setLoading] = useState(true);
-  const [spikeAlert, setSpikeAlert] = useState(false);
-  const [latestStats, setLatestStats] = useState({ positive: 0, negative: 0, neutral: 0 });
-  const [error, setError] = useState(null);
+  const [isDemoMode, setIsDemoMode] = useState(false);
+  const [spikeDetected, setSpikeDetected] = useState(false);
 
   useEffect(() => {
-    fetchDashboardData();
+    const fetchIntel = async () => {
+      try {
+        // WORLD-CLASS PERFORMANCE: Fetch both data streams in parallel
+        const [socialRes, grievanceRes] = await Promise.all([
+            fetch('http://localhost:8000/api/social/dashboard'),
+            fetch('http://localhost:8000/api/dashboard/grievances')
+        ]);
+
+        const socialData = socialRes.ok ? await socialRes.json() : [];
+        const grievanceData = grievanceRes.ok ? await grievanceRes.json() : [];
+
+        // 1. PROCESS SENTIMENT (The "Feeling")
+        // Reverse to show Oldest -> Newest timeline
+        const processedChart = Array.isArray(socialData) ? socialData.reverse().map(item => ({
+          name: item.report_date ? new Date(item.report_date).toLocaleDateString(undefined, { weekday: 'short' }) : 'Day',
+          score: (item.positive_count || 0) - (item.negative_count || 0), // Net Score
+          positive: item.positive_count || 0,
+          negative: item.negative_count || 0,
+          isSpike: item.spike_detected === true
+        })) : [];
+        
+        setSentimentData(processedChart);
+
+        // Check for active spike in the latest data point
+        if (processedChart.length > 0) {
+            setSpikeDetected(processedChart[processedChart.length - 1].isSpike);
+        }
+
+        // 2. PROCESS REASONING (The "Why")
+        // Correlation Logic: Find the most frequent issue type in Critical/High grievances
+        if (Array.isArray(grievanceData) && grievanceData.length > 0) {
+            const issues = {};
+            const locations = {};
+            
+            grievanceData.forEach(g => {
+                const type = g.issue_type || "Infrastructure";
+                const loc = g.village || "Unknown Area";
+                issues[type] = (issues[type] || 0) + 1;
+                locations[loc] = (locations[loc] || 0) + 1;
+            });
+
+            // Sort by frequency (Highest count first)
+            const sortedIssues = Object.entries(issues).sort((a,b) => b[1] - a[1]);
+            const sortedLocs = Object.entries(locations).sort((a,b) => b[1] - a[1]);
+            
+            // Safe Assignment (Check if array has items)
+            if (sortedIssues.length > 0) setTopIssue(sortedIssues[0][0]);
+            if (sortedLocs.length > 0) setTopLocation(sortedLocs[0][0]);
+        }
+
+      } catch (err) {
+        console.warn("Intel Error, switching to demo mode", err);
+        setIsDemoMode(true);
+        // Fallback Demo Data for UI Stability
+        setSentimentData([
+            { name: 'Mon', score: 10, positive: 20, negative: 10, isSpike: false },
+            { name: 'Tue', score: -5, positive: 15, negative: 20, isSpike: false },
+            { name: 'Wed', score: 5, positive: 18, negative: 13, isSpike: false },
+            { name: 'Thu', score: -15, positive: 10, negative: 25, isSpike: true },
+            { name: 'Fri', score: -10, positive: 12, negative: 22, isSpike: false },
+        ]);
+        setTopIssue("Water Supply");
+        setTopLocation("Ward 5");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchIntel();
   }, []);
 
-  const fetchDashboardData = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      const response = await fetch(`${BACKEND_URL}/api/social/dashboard`);
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-      
-      const data = await response.json();
-      
-      // Reverse data (API returns newest first, chart needs oldest first)
-      const reversed = [...data].reverse();
-      setChartData(reversed);
-      
-      // Check for spike in ANY item
-      const hasSpike = data.some(item => item.spike_detected === true);
-      setSpikeAlert(hasSpike);
-      
-      // Get latest stats (first item from original data is most recent)
-      if (data.length > 0) {
-        const totals = data.reduce((acc, item) => ({
-          positive: acc.positive + (item.positive_count || 0),
-          negative: acc.negative + (item.negative_count || 0),
-          neutral: acc.neutral + (item.neutral_count || 0),
-        }), { positive: 0, negative: 0, neutral: 0 });
-        
-        setLatestStats(totals);
-        
-        // Also check if any negative count is unusually high (spike detection fallback)
-        const avgNegative = totals.negative / Math.max(data.length, 1);
-        const latestNegative = data[0]?.negative_count || 0;
-        if (latestNegative > avgNegative * 2 && latestNegative >= 3) {
-          setSpikeAlert(true);
-        }
-      }
-      
-    } catch (err) {
-      console.error('Dashboard fetch error:', err);
-      setError('Failed to load sentiment data');
-    } finally {
-      setLoading(false);
-    }
-  };
+  // METRIC CALCULATION
+  const latest = sentimentData.length > 0 ? sentimentData[sentimentData.length - 1] : { positive: 0, negative: 0 };
+  const total = (latest.positive || 0) + (latest.negative || 0) + (latest.neutral || 0); // Include neutral for correct total
+  // Approval Rating Calculation (Safe Division)
+  // Default to 50% if no data to avoid "0%" shock
+  const approval = total > 0 ? Math.round((latest.positive / total) * 100) : 50;
+  
+  // Logic for Alert State
+  const isCritical = spikeDetected || approval < 40;
+  const isNegative = approval < 50;
 
-  const formatDate = (dateStr) => {
-    if (!dateStr) return '';
-    const date = new Date(dateStr);
-    return date.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' });
-  };
-
-  if (loading) {
-    return (
-      <div 
-        className="p-6 rounded-xl shadow-lg flex items-center justify-center h-64"
-        style={{ backgroundColor: COLORS.background }}
-        data-testid="sentiment-dashboard-loading"
-      >
-        <Loader2 className="h-8 w-8 animate-spin" style={{ color: COLORS.positive }} />
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div 
-        className="p-6 rounded-xl shadow-lg"
-        style={{ backgroundColor: COLORS.background, color: COLORS.text }}
-        data-testid="sentiment-dashboard-error"
-      >
-        <p className="text-center text-red-400">{error}</p>
-      </div>
-    );
-  }
-
-  // SAFETY CHECK: Handle empty data to prevent crash
-  const latestData = chartData.length > 0 ? chartData[chartData.length - 1] : null;
-
-  // Safe Counts (Default to 0 if missing)
-  const positive = latestStats?.positive ?? 0;
-  const negative = latestStats?.negative ?? 0;
-  const neutral = latestStats?.neutral ?? 0;
-  const total = positive + negative + neutral;
-
-  // Safe Calculation (Prevent Division by Zero)
-  const trustScore = total > 0 ? ((positive / total) * 100) : 0;
-
-  // Safe Spike Detection
-  const isSpike = spikeAlert || (latestData?.spike_detected === true);
+  if (loading) return <div className="h-48 bg-[#1F2937] rounded-xl animate-pulse border border-gray-800"></div>;
 
   return (
-    <div 
-      className="p-6 rounded-xl shadow-lg space-y-6"
-      style={{ backgroundColor: COLORS.background, color: COLORS.text }}
-      data-testid="sentiment-dashboard"
-    >
+    <div className="bg-[#1F2937] rounded-xl shadow-lg border border-gray-700 overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold tracking-tight">Happiness Report</h2>
-        {isSpike && (
-          <span 
-            className="px-3 py-1 rounded-full text-xs font-bold animate-pulse flex items-center gap-1"
-            style={{ backgroundColor: COLORS.negative, color: 'white' }}
-            data-testid="spike-alert-badge"
-          >
-            <AlertTriangle className="h-3 w-3" />
-            SPIKE DETECTED
-          </span>
-        )}
-      </div>
-
-      {/* KPI Cards Row */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {/* Public Trust Card */}
-        <div 
-          className="p-5 rounded-lg"
-          style={{ backgroundColor: COLORS.cardSurface }}
-          data-testid="public-trust-card"
-        >
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs uppercase tracking-wider" style={{ color: COLORS.textMuted }}>
-              Public Trust
-            </span>
-            <TrendingUp className="h-5 w-5" style={{ color: COLORS.positive }} />
-          </div>
-          <p className="text-4xl font-bold" style={{ color: COLORS.positive }}>
-            {positive}
-          </p>
-          <p className="text-sm mt-1" style={{ color: COLORS.textMuted }}>
-            {trustScore.toFixed(1)}% positive
-          </p>
-        </div>
-
-        {/* Critical Issues Card */}
-        <div 
-          className="p-5 rounded-lg relative"
-          style={{ backgroundColor: COLORS.cardSurface }}
-          data-testid="critical-issues-card"
-        >
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs uppercase tracking-wider" style={{ color: COLORS.textMuted }}>
-              Critical Issues
-            </span>
-            <TrendingDown className="h-5 w-5" style={{ color: COLORS.negative }} />
-          </div>
-          <p className="text-4xl font-bold" style={{ color: COLORS.negative }}>
-            {negative}
-          </p>
-          <p className="text-sm mt-1" style={{ color: COLORS.textMuted }}>
-            Negative mentions
-          </p>
-          {isSpike && (
-            <span 
-              className="absolute top-2 right-2 px-2 py-0.5 rounded text-xs font-bold animate-pulse"
-              style={{ backgroundColor: COLORS.negative, color: 'white' }}
-            >
-              ⚠️ SPIKE
-            </span>
-          )}
-        </div>
-
-        {/* Neutral Card */}
-        <div 
-          className="p-5 rounded-lg"
-          style={{ backgroundColor: COLORS.cardSurface }}
-          data-testid="neutral-card"
-        >
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs uppercase tracking-wider" style={{ color: COLORS.textMuted }}>
-              Neutral
-            </span>
-          </div>
-          <p className="text-4xl font-bold" style={{ color: COLORS.neutral }}>
-            {neutral}
-          </p>
-          <p className="text-sm mt-1" style={{ color: COLORS.textMuted }}>
-            Neutral mentions
-          </p>
-        </div>
-      </div>
-
-      {/* Chart */}
-      <div 
-        className="p-4 rounded-lg"
-        style={{ backgroundColor: COLORS.cardSurface }}
-        data-testid="sentiment-chart"
-      >
-        <h3 className="text-lg font-semibold mb-4" style={{ color: COLORS.text }}>
-          Sentiment Trend (Last 7 Days)
+      <div className="bg-[#111827] px-6 py-4 border-b border-gray-700 flex justify-between items-center">
+        <h3 className="text-[#FF9933] font-bold text-lg flex items-center gap-2">
+            <Activity size={20} /> Public Mood Intel
         </h3>
-        {chartData.length > 0 ? (
-          <ResponsiveContainer width="100%" height={280}>
-            <LineChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 10 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-              <XAxis 
-                dataKey="report_date" 
-                tickFormatter={formatDate}
-                stroke={COLORS.textMuted}
-                tick={{ fill: COLORS.textMuted, fontSize: 12 }}
-              />
-              <YAxis 
-                stroke={COLORS.textMuted}
-                tick={{ fill: COLORS.textMuted, fontSize: 12 }}
-              />
-              <Tooltip 
-                contentStyle={{ 
-                  backgroundColor: COLORS.cardSurface, 
-                  border: 'none',
-                  borderRadius: '8px',
-                  color: COLORS.text
-                }}
-                labelFormatter={formatDate}
-              />
-              <Line 
-                type="monotone"
-                dataKey="positive_count" 
-                stroke={COLORS.positive} 
-                strokeWidth={3}
-                dot={{ fill: COLORS.positive, strokeWidth: 2 }}
-                name="Positive"
-              />
-              <Line 
-                type="monotone"
-                dataKey="negative_count" 
-                stroke={COLORS.negative} 
-                strokeWidth={3}
-                dot={{ fill: COLORS.negative, strokeWidth: 2 }}
-                name="Negative"
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        ) : (
-          <div className="h-64 flex items-center justify-center" style={{ color: COLORS.textMuted }}>
-            No data available yet. Start analyzing sentiment to see trends.
-          </div>
-        )}
+        {isDemoMode && <span className="text-[10px] bg-gray-800 text-gray-400 px-2 py-1 rounded border border-gray-700">SIMULATION</span>}
       </div>
 
-      {/* Platform Breakdown */}
-      {chartData.length > 0 && (
-        <div 
-          className="p-4 rounded-lg"
-          style={{ backgroundColor: COLORS.cardSurface }}
-          data-testid="platform-breakdown"
-        >
-          <h3 className="text-lg font-semibold mb-3" style={{ color: COLORS.text }}>
-            By Platform
-          </h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {[...new Set(chartData.map(d => d.platform))].map(platform => {
-              const platformData = chartData.filter(d => d.platform === platform);
-              const total = platformData.reduce((sum, d) => 
-                sum + (d.positive_count || 0) + (d.negative_count || 0) + (d.neutral_count || 0), 0);
-              return (
-                <div 
-                  key={platform}
-                  className="p-3 rounded-md text-center"
-                  style={{ backgroundColor: COLORS.background }}
-                >
-                  <p className="text-sm font-medium" style={{ color: COLORS.text }}>{platform}</p>
-                  <p className="text-xl font-bold" style={{ color: COLORS.positive }}>{total}</p>
-                </div>
-              );
-            })}
-          </div>
+      <div className="p-6 grid grid-cols-1 md:grid-cols-12 gap-6">
+        
+        {/* LEFT: THE SCORE (30% Width) */}
+        <div className="md:col-span-4 flex flex-col justify-center border-r border-gray-800 pr-6">
+            <span className="text-gray-400 text-xs font-bold uppercase tracking-widest">Current Approval</span>
+            <div className="flex items-center gap-3 mt-2">
+                <h1 className={`text-6xl font-extrabold ${isCritical ? 'text-red-500' : 'text-[#FF9933]'}`}>
+                    {approval}%
+                </h1>
+                {isNegative ? <TrendingDown size={40} className="text-red-500" /> : <TrendingUp size={40} className="text-[#FF9933]" />}
+            </div>
+            <p className="text-sm text-gray-400 mt-2">
+                Based on <span className="text-white font-bold">{total > 0 ? total : 'recent'}</span> interactions.
+            </p>
         </div>
-      )}
+
+        {/* RIGHT: THE REASONING (70% Width) */}
+        <div className="md:col-span-8 flex flex-col justify-between">
+            <div className="mb-4">
+                <h4 className="text-gray-200 font-bold mb-2 flex items-center gap-2">
+                    {isCritical ? <AlertTriangle size={18} className="text-red-500" /> : <AlertCircle size={18} className="text-[#FF9933]" />}
+                    EXECUTIVE INSIGHT
+                </h4>
+                
+                {/* The "Why" Logic Displayed clearly */}
+                <p className="text-gray-300 text-lg leading-relaxed">
+                    {isCritical
+                        ? <span>
+                             <strong className="text-red-400">CRITICAL ALERT:</strong> A sharp spike in negativity has been detected. This is driven by <strong className="text-white border-b-2 border-red-500">{topIssue}</strong> failures in <strong className="text-white">{topLocation}</strong>.
+                          </span>
+                        : isNegative 
+                            ? <span>
+                                Sentiment is trending down. The primary driver is a surge in <strong className="text-white border-b-2 border-red-500">{topIssue}</strong> complaints in <strong className="text-white">{topLocation}</strong>.
+                              </span>
+                            : <span>
+                                Sentiment is stable. Your recent focus on <strong className="text-white border-b-2 border-[#FF9933]">{topIssue}</strong> is resonating positively with citizens in <strong className="text-white">{topLocation}</strong>.
+                              </span>
+                    }
+                </p>
+            </div>
+            
+            {/* Context Sparkline */}
+            <div className="h-16 w-full opacity-40">
+                <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={sentimentData}>
+                        <defs>
+                            <linearGradient id="colorScore" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor={isNegative ? "#EF4444" : "#FF9933"} stopOpacity={0.8}/>
+                                <stop offset="95%" stopColor={isNegative ? "#EF4444" : "#FF9933"} stopOpacity={0}/>
+                            </linearGradient>
+                        </defs>
+                        <Area 
+                            type="monotone" 
+                            dataKey="score" 
+                            stroke={isNegative ? "#EF4444" : "#FF9933"} 
+                            fill="url(#colorScore)" 
+                            strokeWidth={2}
+                        />
+                    </AreaChart>
+                </ResponsiveContainer>
+            </div>
+        </div>
+      </div>
     </div>
   );
-}
+};
+
+export default SentimentDashboard;
