@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import Layout from '../components/Layout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { Textarea } from "../components/ui/textarea";
@@ -120,12 +119,11 @@ const SendNews = () => {
   };
 
   return (
-    <Layout>
-      <div className="p-6 space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold text-white mb-2">Send News & Updates</h1>
-          <p className="text-slate-400">The centralized broadcasting console for all channels.</p>
-        </div>
+    <div className="p-6 space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold text-white mb-2">Send News & Updates</h1>
+        <p className="text-slate-400">The centralized broadcasting console for all channels.</p>
+      </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* LEFT: Drafting Engine */}
