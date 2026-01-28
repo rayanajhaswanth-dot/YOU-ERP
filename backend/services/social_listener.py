@@ -1,7 +1,7 @@
 import random
 from textblob import TextBlob
 from datetime import datetime
-from backend.database import supabase
+from database import supabase
 
 # Mock Comments to simulate "Listening" to the public
 # In Production, this would be replaced by requests.get(FACEBOOK_GRAPH_API)

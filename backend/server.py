@@ -6,6 +6,11 @@ import logging
 import subprocess
 import sys
 from pathlib import Path
+from contextlib import asynccontextmanager
+
+# APScheduler for Background Tasks
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from services.social_listener import fetch_and_analyze_social_feed
 
 # TextBlob Corpora Download (for Sentiment Engine)
 try:
@@ -24,7 +29,30 @@ from routes import auth_routes, grievance_routes, posts_routes, analytics_routes
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-app = FastAPI(title="YOU - Governance ERP", version="1.0.0")
+# Setup Scheduler
+scheduler = AsyncIOScheduler()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # --- STARTUP ---
+    print("🚀 System Starting... Initializing Social Listener.")
+    
+    # Schedule the Social Listener to run every 5 minutes
+    scheduler.add_job(fetch_and_analyze_social_feed, 'interval', minutes=5)
+    scheduler.start()
+    
+    # Run once immediately on startup to populate initial data
+    try:
+        await fetch_and_analyze_social_feed()
+    except Exception as e:
+        print(f"⚠️ Initial Social Listener run failed: {e}")
+    
+    yield
+    # --- SHUTDOWN ---
+    print("🛑 System Shutting Down...")
+    scheduler.shutdown()
+
+app = FastAPI(title="YOU - Governance ERP", version="1.0.0", lifespan=lifespan)
 
 # CORS middleware must be added BEFORE including routers
 app.add_middleware(
