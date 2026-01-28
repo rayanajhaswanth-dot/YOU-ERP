@@ -60,8 +60,7 @@ async def fetch_and_analyze_social_feed():
         "positive_count": positive_count,
         "negative_count": negative_count,
         "neutral_count": neutral_count,
-        "sentiment_score": total_score / len(new_comments) if new_comments else 0,
-        "content": " | ".join(new_comments[:2])  # Store sample comments
+        "sentiment_score": total_score / len(new_comments) if new_comments else 0
     }
     
     # 3. Store in DB
