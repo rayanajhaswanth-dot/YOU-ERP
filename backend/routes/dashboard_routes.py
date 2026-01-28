@@ -8,7 +8,9 @@ router = APIRouter()
 
 
 class DraftRequest(BaseModel):
-    raw_topic: str
+    topic: str = None
+    raw_topic: str = None
+    tone: str = "professional"
 
 
 @router.get("/grievances")
@@ -70,13 +72,33 @@ async def get_dashboard_stats():
 @router.post("/draft")
 async def draft_post(req: DraftRequest):
     """
-    Simulated AI Drafting for instant UI feedback.
-    Returns pre-formatted drafts for different platforms.
+    AI Drafting for Broadcast Center.
+    Returns pre-formatted drafts for different platforms based on topic and tone.
     """
-    topic = req.raw_topic
+    # Support both 'topic' and 'raw_topic' field names
+    topic = req.topic or req.raw_topic or "Update"
+    tone = req.tone
+    
+    # Tone-based variations
+    if tone == "urgent":
+        twitter = f"🚨 URGENT: {topic}. Immediate action being taken! #ConstituencyFirst #ActionNow"
+        whatsapp = f"⚠️ URGENT UPDATE\n\n{topic}\n\nOur team is on it. Stay informed.\n\n- Your Sevak"
+        facebook = f"🔴 URGENT NOTICE\n\n{topic}\n\nWe are taking immediate action. Your safety and well-being are our top priority."
+    elif tone == "empathetic":
+        twitter = f"We hear you. {topic}. Together, we will overcome. 🙏 #WeStandWithYou"
+        whatsapp = f"🙏 Namaste,\n\nWe understand your concerns.\n\n{topic}\n\nWe are here for you.\n\n- Your Sevak"
+        facebook = f"Dear Citizens,\n\nYour concerns matter to us deeply.\n\n{topic}\n\nWe are committed to serving you with compassion and dedication."
+    elif tone == "political":
+        twitter = f"✊ {topic}. This is the change we promised! #Development #Progress #ConstituencyFirst"
+        whatsapp = f"✊ Jai Hind!\n\n{topic}\n\nThis is the development we promised. More to come!\n\n- Your Leader"
+        facebook = f"DEVELOPMENT UPDATE\n\n{topic}\n\nWhen we made promises, we meant them. This is just the beginning of the transformation we envisioned for our constituency."
+    else:  # professional (default)
+        twitter = f"📢 UPDATE: {topic}. We remain committed to progress. #ConstituencyFirst #GoodGovernance"
+        whatsapp = f"🙏 Namaste,\n\nImportant Update:\n\n{topic}\n\nThank you for your continued support.\n\n- Your Sevak"
+        facebook = f"OFFICIAL UPDATE\n\n{topic}\n\nOur commitment to development and good governance remains unwavering. Thank you for your trust."
     
     return {
-        "twitter": f"🚨 UPDATE: {topic}. We are working tirelessly for you! #ConstituencyFirst",
-        "whatsapp": f"🙏 Namaste. Important Update regarding {topic}. Your Sevak, [Leader Name].",
-        "facebook": f"OFFICIAL STATEMENT: {topic}. Our commitment to development remains strong."
+        "twitter": twitter,
+        "whatsapp": whatsapp,
+        "facebook": facebook
     }
