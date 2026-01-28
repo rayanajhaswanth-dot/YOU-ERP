@@ -1,11 +1,19 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, EmailStr
 from database import get_supabase
 from auth import get_password_hash, verify_password, create_access_token, get_current_user, TokenData
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import uuid
 
 router = APIRouter()
+
+# CTO UPDATE: Enhanced Token response with role and user_id
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+    role: str
+    user_id: str
 
 class RegisterRequest(BaseModel):
     email: EmailStr
@@ -14,6 +22,13 @@ class RegisterRequest(BaseModel):
     role: str = "pa"
     politician_id: str
 
+class UserCreate(BaseModel):
+    email: str
+    password: str
+    full_name: str
+    role: str = "citizen"
+    phone_number: str = None
+
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
@@ -21,6 +36,8 @@ class LoginRequest(BaseModel):
 class LoginResponse(BaseModel):
     access_token: str
     token_type: str
+    role: str
+    user_id: str
     user: dict
 
 @router.post("/register")
@@ -71,26 +88,32 @@ async def login(data: LoginRequest):
         # For users without password_hash, accept any password (development mode)
         pass
     
+    user_role = user.get('role', 'politician').lower()
+    user_id = str(user['id'])
+    
     token_payload = {
-        "user_id": user['id'],
+        "user_id": user_id,
         "email": user['email'],
-        "role": user.get('role', 'politician').lower(),
+        "role": user_role,
         "politician_id": user.get('politician_id')
     }
     
     access_token = create_access_token(token_payload)
     
     user_info = {
-        "id": user['id'],
+        "id": user_id,
         "email": user['email'],
         "full_name": user.get('full_name', user['email'].split('@')[0].title()),
-        "role": user.get('role', 'politician').lower(),
+        "role": user_role,
         "politician_id": user.get('politician_id')
     }
     
+    # CTO UPDATE: Return role and user_id at top level for frontend storage
     return LoginResponse(
         access_token=access_token,
         token_type="bearer",
+        role=user_role,
+        user_id=user_id,
         user=user_info
     )
 

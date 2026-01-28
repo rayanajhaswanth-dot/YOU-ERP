@@ -23,8 +23,12 @@ export default function Login({ onLogin }) {
         password
       });
 
+      // CTO UPDATE: Store role and user_id in localStorage for RBAC
+      localStorage.setItem('user_role', response.data.role);
+      localStorage.setItem('user_id', response.data.user_id);
+
       onLogin(response.data.access_token, response.data.user);
-      toast.success('Welcome back!');
+      toast.success(`Welcome back! Logged in as ${response.data.role.toUpperCase()}`);
     } catch (error) {
       console.error('Login error:', error);
       toast.error(error.response?.data?.detail || 'Login failed. Please try again.');
