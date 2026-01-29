@@ -5,8 +5,14 @@ from database import get_supabase
 from auth import get_current_user, TokenData
 from datetime import datetime, timezone, timedelta
 import uuid
+import os
+import requests
 
 router = APIRouter()
+
+# CTO CONFIG: Social Media Keys for Campaign Analytics
+FB_PAGE_ACCESS_TOKEN = os.getenv("FACEBOOK_PAGE_ACCESS_TOKEN")
+FB_PAGE_ID = os.getenv("FACEBOOK_PAGE_ID")
 
 class SentimentData(BaseModel):
     platform: str
