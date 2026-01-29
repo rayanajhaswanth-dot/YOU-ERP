@@ -129,3 +129,88 @@ async def get_dashboard_stats(current_user: TokenData = Depends(get_current_user
         "total_posts": len(posts.data),
         "published_posts": published_posts
     }
+
+
+@router.get("/campaigns")
+async def get_campaign_performance(user: TokenData = Depends(get_current_user)):
+    """
+    Fetches performance metrics for recent social media posts.
+    Currently supports: Facebook Page Feed.
+    """
+    
+    # 1. RBAC Security Check
+    user_role = user.role.lower() if user.role else "citizen"
+    if user_role not in ["leader", "osd", "politician"]:
+        raise HTTPException(status_code=403, detail="Access denied to Intelligence Data.")
+
+    if not FB_PAGE_ACCESS_TOKEN or not FB_PAGE_ID:
+        # Graceful degradation if keys are missing (for dev environment)
+        return {
+            "summary": {"total_reach": 0, "total_engagement": 0},
+            "posts": []
+        }
+
+    try:
+        # 2. Query Meta Graph API for Posts + Insights
+        url = f"https://graph.facebook.com/v18.0/{FB_PAGE_ID}/feed"
+        params = {
+            "access_token": FB_PAGE_ACCESS_TOKEN,
+            "fields": "id,message,created_time,insights.metric(post_impressions_unique,post_engagements),permalink_url",
+            "limit": 10  # Last 10 posts
+        }
+        
+        response = requests.get(url, params=params)
+        response.raise_for_status()
+        data = response.json()
+        
+        posts_data = []
+        total_reach = 0
+        total_engagement = 0
+
+        # 3. Process the Data
+        for post in data.get("data", []):
+            message = post.get("message", "Media Update")
+            
+            # Extract Insights safely
+            insights = post.get("insights", {}).get("data", [])
+            
+            reach = 0
+            engagement = 0
+            
+            for metric in insights:
+                if metric["name"] == "post_impressions_unique":
+                    reach = metric["values"][0]["value"]
+                if metric["name"] == "post_engagements":
+                    engagement = metric["values"][0]["value"]
+            
+            total_reach += reach
+            total_engagement += engagement
+
+            posts_data.append({
+                "id": post["id"],
+                "platform": "facebook",
+                "content": message[:50] + "..." if len(message) > 50 else message,
+                "date": post["created_time"],
+                "reach": reach,
+                "engagement": engagement,
+                "url": post.get("permalink_url", "#")
+            })
+
+        print(f"✅ Campaign Analytics: Fetched {len(posts_data)} posts")
+        return {
+            "summary": {
+                "total_reach": total_reach,
+                "total_engagement": total_engagement,
+                "platform_breakdown": {"facebook": len(posts_data)}
+            },
+            "posts": posts_data
+        }
+
+    except Exception as e:
+        print(f"❌ Analytics Error: {str(e)}")
+        # Don't crash the dashboard, return empty state with error flag
+        return {
+            "error": "Could not fetch live data from Meta.",
+            "details": str(e),
+            "posts": []
+        }
