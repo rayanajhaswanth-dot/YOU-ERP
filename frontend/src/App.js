@@ -51,6 +51,7 @@ function App() {
             <Route path="help-people" element={<HelpPeople user={user} />} />
             <Route path="send-news" element={<SendNews user={user} />} />
             <Route path="happiness-report" element={<HappinessReport user={user} />} />
+            <Route path="analytics" element={<Analytics user={user} />} />
           </Route>
         </Routes>
       </BrowserRouter>
