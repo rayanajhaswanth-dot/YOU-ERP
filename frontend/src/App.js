@@ -6,6 +6,7 @@ import Dashboard from './pages/Dashboard';
 import HelpPeople from './pages/HelpPeople';
 import SendNews from './pages/SendNews';
 import HappinessReport from './pages/HappinessReport';
+import Analytics from './pages/Analytics';
 import Layout from './components/Layout';
 import { Toaster } from './components/ui/sonner';
 
