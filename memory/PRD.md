@@ -45,6 +45,8 @@ A production-ready SaaS platform for Indian political leaders featuring AI-power
 - `POST /api/social/analyze` - Sentiment analysis
 - `GET /api/social/dashboard` - Sentiment data for charts
 - `POST /api/whatsapp/webhook` - WhatsApp message processing
+- `POST /api/posts/publish` - Publish to Facebook/Instagram
+- `GET /api/analytics/campaigns` - Campaign performance metrics (FB & IG)
 
 ## Database Schema Updates Required
 ```sql
