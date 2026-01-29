@@ -62,7 +62,9 @@ ALTER TABLE sentiment_analytics ADD COLUMN IF NOT EXISTS neutral_count INTEGER D
 
 ## Pending Tasks
 - [ ] Test WhatsApp voice transcription (Telugu, >30 seconds)
-- [ ] Run Supabase schema migrations
-- [ ] Connect real social media APIs
-- [ ] Multi-role access control
+- [ ] Run Supabase schema migrations (CRITICAL BLOCKER)
+- [ ] Refine Broadcast Center (view past broadcast history)
+- [ ] Expand Multi-Role Access Control
 - [ ] Real-time ticker with Socket.io
+- [ ] Remove obsolete files (tickets_routes.py, HappinessReport.jsx)
+- [ ] Frontend/Backend label audit
