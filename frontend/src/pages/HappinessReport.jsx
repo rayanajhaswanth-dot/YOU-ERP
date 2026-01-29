@@ -12,9 +12,9 @@ const HappinessReport = () => {
   const [digitalData, setDigitalData] = useState(null);
   const [groundData, setGroundData] = useState(null);
   const [scores, setScores] = useState({
-    happinessIndex: 0,
+    happinessIndex: 50, // Default to neutral start
     digitalPerception: 0,
-    groundStability: 0
+    groundStability: 50
   });
 
   useEffect(() => {
@@ -41,20 +41,29 @@ const HappinessReport = () => {
       setDigitalData(digital);
       setGroundData(grievances);
 
-      // --- CALCULATE SCORES (The "Golden Standard" Logic) ---
+      // --- ALGORITHM V2: LAUNCH MODE (High Sensitivity) ---
 
-      // 1. Ground Stability: Based on Resolution Rate
-      // Formula: (Resolved Tickets / Total Tickets) * 100
+      // 1. Ground Stability Calculation
       const totalGrievances = grievances.length;
       const resolvedGrievances = grievances.filter(g => g.status === 'resolved').length;
-      const groundStabilityScore = totalGrievances > 0 
-        ? Math.round((resolvedGrievances / totalGrievances) * 100) 
-        : 50; // Default neutral if no data
+      
+      let groundStabilityScore = 50; // Default Neutral
+      if (totalGrievances > 0) {
+        // Simple Percentage Resolution Rate
+        groundStabilityScore = Math.round((resolvedGrievances / totalGrievances) * 100);
+      }
 
-      // 2. Digital Perception: Based on Engagement Velocity
-      // Formula: Heuristic based on recent engagement (cap at 100 for display)
-      const engagementScore = Math.min(100, Math.round((digital.summary.total_engagement / 10) + (digital.summary.total_reach / 1000)));
-      const digitalPerceptionScore = engagementScore || 0;
+      // 2. Digital Perception Calculation
+      // Logic: (Engagement * 2) points + (Reach / 50) points. Max 100.
+      // This ensures even 1 like gives 2 points visible on the board.
+      const engagementPoints = (digital.summary.total_engagement || 0) * 2;
+      const reachPoints = (digital.summary.total_reach || 0) / 50;
+      
+      const rawDigitalScore = engagementPoints + reachPoints;
+      // Cap at 100, but ensure at least 5 points if there is ANY activity at all
+      const digitalPerceptionScore = rawDigitalScore > 0 
+        ? Math.min(100, Math.max(5, Math.round(rawDigitalScore))) 
+        : 0;
 
       // 3. Overall Happiness Index
       const happinessIndex = Math.round((groundStabilityScore + digitalPerceptionScore) / 2);
@@ -78,6 +87,14 @@ const HappinessReport = () => {
     return "text-red-500";
   };
 
+  // Helper to safely get counts (Data Healing)
+  // If likes are 0 but engagement is high, use engagement as a proxy for likes to show visual activity
+  const getSafeLikeCount = (post) => {
+    if (post.likes > 0) return post.likes;
+    if (post.engagement > 0 && post.comments === 0) return post.engagement; // Likely all likes
+    return 0;
+  };
+
   if (loading) {
     return (
       <div className="flex h-[60vh] items-center justify-center">
@@ -99,8 +116,11 @@ const HappinessReport = () => {
             <Smile className="h-8 w-8 text-orange-500" />
             Happiness Report
           </h1>
-          <p className="text-slate-400 mt-1">
+          <p className="text-slate-400 mt-1 flex items-center gap-2">
             Live algorithmic assessment of constituency sentiment.
+            <Badge variant="outline" className="text-[10px] border-orange-500/50 text-orange-500">
+              Algorithm: Launch Mode v2.0
+            </Badge>
           </p>
         </div>
         <div className="bg-slate-900/80 backdrop-blur border border-slate-800 p-4 rounded-xl flex items-center gap-4">
@@ -134,7 +154,9 @@ const HappinessReport = () => {
           <CardContent className="space-y-6 relative z-10">
             <div className="flex items-end justify-between">
               <div className="space-y-1">
-                <span className="text-4xl font-bold text-white">{scores.digitalPerception}</span>
+                <span className={`text-4xl font-bold ${getScoreColor(scores.digitalPerception)}`}>
+                  {scores.digitalPerception}
+                </span>
                 <span className="text-sm text-slate-500 block">/ 100 Score</span>
               </div>
               <div className="text-right space-y-1">
@@ -147,19 +169,28 @@ const HappinessReport = () => {
             <Progress value={scores.digitalPerception} className="h-2 bg-slate-900" />
 
             <div className="grid grid-cols-3 gap-2 pt-2">
+              {/* LIKES: Uses safe fallback logic */}
               <div className="bg-slate-900 p-3 rounded-lg text-center border border-slate-800">
                 <ThumbsUp className="h-4 w-4 text-blue-400 mx-auto mb-2" />
-                <span className="block text-xl font-bold text-white">{digitalData?.posts?.reduce((acc, curr) => acc + (curr.likes || 0), 0) || 0}</span>
+                <span className="block text-xl font-bold text-white">
+                  {digitalData?.posts?.reduce((acc, curr) => acc + getSafeLikeCount(curr), 0) || 0}
+                </span>
                 <span className="text-[10px] text-slate-500 uppercase">Likes</span>
               </div>
+              {/* COMMENTS */}
               <div className="bg-slate-900 p-3 rounded-lg text-center border border-slate-800">
                 <MessageCircle className="h-4 w-4 text-green-400 mx-auto mb-2" />
-                <span className="block text-xl font-bold text-white">{digitalData?.posts?.reduce((acc, curr) => acc + (curr.comments || 0), 0) || 0}</span>
+                <span className="block text-xl font-bold text-white">
+                  {digitalData?.posts?.reduce((acc, curr) => acc + (curr.comments || 0), 0) || 0}
+                </span>
                 <span className="text-[10px] text-slate-500 uppercase">Comments</span>
               </div>
+              {/* ENGAGEMENT */}
               <div className="bg-slate-900 p-3 rounded-lg text-center border border-slate-800">
                 <TrendingUp className="h-4 w-4 text-orange-400 mx-auto mb-2" />
-                <span className="block text-xl font-bold text-white">{digitalData?.summary?.total_engagement?.toLocaleString() || 0}</span>
+                <span className="block text-xl font-bold text-white">
+                  {digitalData?.summary?.total_engagement?.toLocaleString() || 0}
+                </span>
                 <span className="text-[10px] text-slate-500 uppercase">Engage</span>
               </div>
             </div>
@@ -181,7 +212,9 @@ const HappinessReport = () => {
           <CardContent className="space-y-6 relative z-10">
             <div className="flex items-end justify-between">
               <div className="space-y-1">
-                <span className="text-4xl font-bold text-white">{scores.groundStability}</span>
+                <span className={`text-4xl font-bold ${getScoreColor(scores.groundStability)}`}>
+                  {scores.groundStability}
+                </span>
                 <span className="text-sm text-slate-500 block">/ 100 Score</span>
               </div>
               <div className="text-right space-y-1">
