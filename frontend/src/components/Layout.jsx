@@ -9,6 +9,7 @@ export default function Layout({ user, onLogout }) {
     { path: '/', icon: Home, label: 'Briefing Room' },
     { path: '/help-people', icon: Users, label: 'Help People' },
     { path: '/send-news', icon: Send, label: 'Send News' },
+    { path: '/analytics', icon: TrendingUp, label: 'Analytics' },
     { path: '/happiness-report', icon: Heart, label: 'Happiness Report' }
   ];
 
