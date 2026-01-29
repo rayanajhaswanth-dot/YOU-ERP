@@ -25,7 +25,7 @@ async def fetch_facebook_data():
         }
         response = await asyncio.to_thread(requests.get, url, params=params)
         if response.status_code != 200:
-            print(f"❌ Facebook Analytics Error: {response.text}")
+            print(f"❌ [FB Analytics] Error: {response.text}")
             return []
             
         data = response.json()
@@ -54,64 +54,93 @@ async def fetch_facebook_data():
                 "url": post.get("permalink_url", "#")
             })
         
-        print(f"✅ Facebook Analytics: Fetched {len(processed_posts)} posts")
+        print(f"✅ [FB Analytics] Fetched {len(processed_posts)} posts")
         return processed_posts
     except Exception as e:
-        print(f"❌ FB Exception: {e}")
+        print(f"❌ [FB Analytics] Exception: {e}")
         return []
 
 async def fetch_instagram_data():
     if not FB_PAGE_ACCESS_TOKEN or not IG_ACCOUNT_ID:
+        print("⚠️ [IG Analytics] Missing Credentials.")
         return []
 
+    processed_posts = []
+    url = f"https://graph.facebook.com/v18.0/{IG_ACCOUNT_ID}/media"
+
+    # Attempt 1: Fetch Media WITH Insights (Requires instagram_manage_insights)
     try:
-        url = f"https://graph.facebook.com/v18.0/{IG_ACCOUNT_ID}/media"
-        # IG Metrics: impressions (Reach approx), engagement (Likes+Comments)
         params = {
             "access_token": FB_PAGE_ACCESS_TOKEN,
             "fields": "id,caption,timestamp,media_type,permalink,insights.metric(impressions,reach,engagement)",
             "limit": 10
         }
-        response = await asyncio.to_thread(requests.get, url, params=params)
-        if response.status_code != 200:
-            print(f"❌ Instagram Analytics Error: {response.text}")
-            return []
-
-        data = response.json()
-        processed_posts = []
-
-        for post in data.get("data", []):
-            caption = post.get("caption", "Instagram Media")
-            insights = post.get("insights", {}).get("data", [])
-            
-            reach = 0
-            engagement = 0
-            
-            # Instagram metrics parsing
-            for metric in insights:
-                if metric["name"] == "reach":
-                    reach = metric["values"][0]["value"]
-                # Fallback to impressions if reach is unavailable
-                elif metric["name"] == "impressions" and reach == 0:
-                    reach = metric["values"][0]["value"]
-                if metric["name"] == "engagement":
-                    engagement = metric["values"][0]["value"]
-
-            processed_posts.append({
-                "id": post["id"],
-                "platform": "instagram",
-                "content": caption[:60] + "..." if len(caption) > 60 else caption,
-                "date": post["timestamp"],
-                "reach": reach,
-                "engagement": engagement,
-                "url": post.get("permalink", "#")
-            })
         
-        print(f"✅ Instagram Analytics: Fetched {len(processed_posts)} posts")
-        return processed_posts
+        response = await asyncio.to_thread(requests.get, url, params=params)
+        
+        if response.status_code == 200:
+            data = response.json()
+            for post in data.get("data", []):
+                processed_posts.append(parse_ig_post(post, has_metrics=True))
+            print(f"✅ [IG Analytics] Fetched {len(processed_posts)} posts with insights")
+            return processed_posts
+        else:
+            print(f"⚠️ [IG Analytics] Insights fetch failed ({response.status_code}). Trying fallback...")
+            # If 400/403, proceed to fallback
+            
     except Exception as e:
-        print(f"❌ IG Exception: {e}")
+        print(f"❌ [IG Analytics] Insights Exception: {e}")
+
+    # Attempt 2: Fallback to Basic Media (Requires only instagram_basic)
+    # This ensures users at least see their posts even if metrics fail.
+    try:
+        print("🔄 [IG Analytics] Attempting Fallback (Basic Media Only)...")
+        fallback_params = {
+            "access_token": FB_PAGE_ACCESS_TOKEN,
+            "fields": "id,caption,timestamp,media_type,permalink",
+            "limit": 10
+        }
+        response = await asyncio.to_thread(requests.get, url, params=fallback_params)
+        
+        if response.status_code == 200:
+            data = response.json()
+            for post in data.get("data", []):
+                processed_posts.append(parse_ig_post(post, has_metrics=False))
+            print(f"✅ [IG Analytics] Fallback Successful ({len(processed_posts)} posts). Note: Metrics are 0 due to missing permissions.")
+            return processed_posts
+        else:
+            print(f"❌ [IG Analytics] Fallback failed: {response.text}")
+            return []
+            
+    except Exception as e:
+        print(f"❌ [IG Analytics] Fallback Exception: {e}")
         return []
+
+def parse_ig_post(post, has_metrics=True):
+    """Helper to parse IG post data safely"""
+    caption = post.get("caption", "Instagram Media")
+    reach = 0
+    engagement = 0
+    
+    if has_metrics:
+        insights = post.get("insights", {}).get("data", [])
+        for metric in insights:
+            if metric["name"] == "reach":
+                reach = metric["values"][0]["value"]
+            elif metric["name"] == "impressions" and reach == 0:
+                reach = metric["values"][0]["value"]
+            if metric["name"] == "engagement":
+                engagement = metric["values"][0]["value"]
+    
+    return {
+        "id": post["id"],
+        "platform": "instagram",
+        "content": caption[:60] + "..." if len(caption) > 60 else caption,
+        "date": post["timestamp"],
+        "reach": reach,
+        "engagement": engagement,
+        "url": post.get("permalink", "#")
+    }
 
 @router.get("/campaigns")
 async def get_campaign_performance(user: TokenData = Depends(get_current_user)):
