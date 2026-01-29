@@ -1,6 +1,6 @@
 import React from 'react';
 import { Outlet, NavLink } from 'react-router-dom';
-import { Home, Users, Send, Heart, LogOut } from 'lucide-react';
+import { Home, Users, Send, Heart, LogOut, TrendingUp } from 'lucide-react';
 import { Button } from './ui/button';
 import SystemTicker from './SystemTicker';
 
