@@ -2,7 +2,6 @@ import React from 'react';
 import { Outlet, NavLink } from 'react-router-dom';
 import { Home, Users, Send, Heart, LogOut, TrendingUp } from 'lucide-react';
 import { Button } from './ui/button';
-import SystemTicker from './SystemTicker';
 
 export default function Layout({ user, onLogout }) {
   const navItems = [
@@ -63,14 +62,10 @@ export default function Layout({ user, onLogout }) {
           </div>
         </aside>
 
-        <main className="ml-72 flex-1 pb-12">
-          <div className="p-8">
-            <Outlet />
-          </div>
+        <main className="ml-72 flex-1">
+          <Outlet />
         </main>
       </div>
-
-      <SystemTicker />
     </div>
   );
 }
