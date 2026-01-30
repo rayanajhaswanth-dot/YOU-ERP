@@ -251,3 +251,57 @@ Respond ONLY with a valid JSON object in this exact format (no markdown, no code
                 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Audio transcription failed: {str(e)}")
+
+
+# --- DETERMINISTIC PRIORITY ANALYSIS (No AI Cost) ---
+
+class TranscriptionRequest(BaseModel):
+    text: str
+
+@router.post("/analyze_priority")
+def analyze_priority(request: TranscriptionRequest):
+    """
+    Feature A: The AI Reality Matrix (PRD v1.0)
+    Deterministic priority assignment based on strict keywords.
+    No LLM calls - instant, zero-cost priority classification.
+    """
+    text = request.text.lower()
+    
+    # We use UTC to ensure consistent calculations across servers
+    now = datetime.now(timezone.utc)
+    
+    priority = "LOW"
+    deadline_hours = 336  # 14 Days default
+    reason = "General grievance awaiting manual classification."
+
+    # PRD RULESET 1: CRITICAL (4 Hours)
+    # Keywords: "Current", "Fire", "Accident", "Open Wire"
+    critical_keywords = ["current", "fire", "accident", "open wire", "shock", "danger", "spark"]
+    if any(k in text for k in critical_keywords):
+        priority = "CRITICAL"
+        deadline_hours = 4
+        reason = "Immediate danger keywords detected (Safety Protocol)."
+
+    # PRD RULESET 2: HIGH (24 Hours)
+    # Keywords: "Water", "Electricity", "Sewage"
+    elif any(k in text for k in ["water", "electricity", "sewage", "drinking", "power", "light", "supply"]):
+        priority = "HIGH"
+        deadline_hours = 24
+        reason = "Basic utility disruption."
+
+    # PRD RULESET 3: MEDIUM (7 Days)
+    # Keywords: "Road", "Construction", "Cleaning"
+    elif any(k in text for k in ["road", "construction", "cleaning", "garbage", "pothole", "street", "drain"]):
+        priority = "MEDIUM"
+        deadline_hours = 168  # 7 Days
+        reason = "Infrastructure/Maintenance issue."
+
+    # Calculate Deadline
+    deadline_dt = now + timedelta(hours=deadline_hours)
+
+    return {
+        "priority": priority,
+        "deadline_hours": deadline_hours,
+        "deadline_timestamp": deadline_dt.isoformat(),  # Returns "2026-01-30T14:30:00+00:00"
+        "reason": reason
+    }
