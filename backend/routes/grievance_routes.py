@@ -199,10 +199,10 @@ async def assign_grievance(
     if not existing.data:
         raise HTTPException(status_code=404, detail="Grievance not found")
     
+    # Core fields only - avoiding columns that may not exist in un-migrated schema
     update_data = {
         'status': data.status.upper(),
-        'assigned_to': data.assigned_official_phone,
-        'assigned_at': datetime.now(timezone.utc).isoformat()
+        'assigned_to': data.assigned_official_phone
     }
     
     result = supabase.table('grievances').update(update_data).eq('id', grievance_id).execute()
