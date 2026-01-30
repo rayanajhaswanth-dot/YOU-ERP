@@ -1,55 +1,39 @@
-import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import React from 'react';
+import { CheckCircle, TrendingUp, TrendingDown } from "lucide-react";
 
-const systemEvents = [
-  { type: 'resolved', message: 'Grievance #G-1247 resolved - Water supply issue in Sector 12' },
-  { type: 'meeting', message: 'Scheduled: Village meeting at Rampur - 3:00 PM' },
-  { type: 'post', message: 'Post approved for Twitter: Infrastructure update' },
-  { type: 'alert', message: 'High priority grievance received - Road accident assistance needed' },
-  { type: 'sentiment', message: 'Sentiment trend: +12% positive mentions this week' }
-];
-
-export default function SystemTicker() {
-  const [currentIndex, setCurrentIndex] = useState(0);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentIndex((prev) => (prev + 1) % systemEvents.length);
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, []);
-
-  const getEventColor = (type) => {
-    switch (type) {
-      case 'resolved':
-        return 'text-emerald-400';
-      case 'alert':
-        return 'text-rose-400';
-      case 'post':
-        return 'text-sky-400';
-      case 'sentiment':
-        return 'text-amber-400';
-      default:
-        return 'text-orange-400';
-    }
-  };
+const SystemTicker = ({ resolvedYesterday = 0, sentimentChange = "+0%" }) => {
+  const isPositive = sentimentChange.includes('+');
 
   return (
-    <div data-testid="system-ticker" className="fixed bottom-0 left-0 right-0 h-10 bg-slate-950 border-t border-slate-800 flex items-center z-50 overflow-hidden">
-      <motion.div
-        key={currentIndex}
-        initial={{ opacity: 0, x: 100 }}
-        animate={{ opacity: 1, x: 0 }}
-        exit={{ opacity: 0, x: -100 }}
-        className="flex items-center gap-4 px-6 w-full"
-      >
-        <span className="text-xs font-mono text-slate-600">SYSTEM LOG</span>
-        <div className="h-1 w-1 rounded-full bg-orange-500 animate-pulse"></div>
-        <span className={`text-sm font-mono ${getEventColor(systemEvents[currentIndex].type)} flex-1`}>
-          {systemEvents[currentIndex].message}
+    <div className="bg-slate-900/95 backdrop-blur border-b border-slate-800 p-2 flex items-center justify-between sticky top-0 z-50 shadow-md">
+      <div className="flex items-center gap-6 animate-in slide-in-from-top duration-500">
+        
+        {/* Metric 1: Resolutions */}
+        <div className="flex items-center gap-2 px-4 border-r border-slate-800">
+          <CheckCircle className="h-4 w-4 text-emerald-500" />
+          <span className="text-xs font-semibold text-slate-300">
+            Resolved Yesterday: <span className="text-white font-bold">{resolvedYesterday}</span>
+          </span>
+        </div>
+
+        {/* Metric 2: Sentiment Shift */}
+        <div className="flex items-center gap-2 px-4">
+          {isPositive ? <TrendingUp className="h-4 w-4 text-blue-500" /> : <TrendingDown className="h-4 w-4 text-red-500" />}
+          <span className="text-xs font-semibold text-slate-300">
+            Sentiment: <span className={isPositive ? "text-blue-400 font-bold" : "text-red-400 font-bold"}>{sentimentChange}</span>
+          </span>
+        </div>
+
+      </div>
+      
+      <div className="flex items-center gap-2 px-4">
+        <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse"></div>
+        <span className="text-[10px] text-slate-500 uppercase tracking-widest hidden md:block">
+          System Operational
         </span>
-      </motion.div>
+      </div>
     </div>
   );
-}
+};
+
+export default SystemTicker;
