@@ -1,153 +1,219 @@
 import React, { useEffect, useState } from 'react';
-import { Card, CardHeader, CardTitle, CardContent } from "./ui/card";
-import { Badge } from "./ui/badge";
-import { Button } from "./ui/button";
-import { ScrollArea } from "./ui/scroll-area";
-import { AlertTriangle, Clock, MapPin, Send, CheckCircle, Loader2 } from "lucide-react";
-import { useToast } from "../hooks/use-toast";
+import { Card, CardContent } from "../components/ui/card";
+import { Badge } from "../components/ui/badge";
+import { Button } from "../components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "../components/ui/dialog";
+import { Input } from "../components/ui/input";
+import { Label } from "../components/ui/label";
+import { AlertCircle, Clock, MapPin, Phone, ArrowRight, Send, Copy } from "lucide-react";
+import { toast } from "sonner";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
 const GrievanceFeed = () => {
   const [grievances, setGrievances] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const { toast } = useToast();
+  const [selectedTicket, setSelectedTicket] = useState(null);
+  const [assigneePhone, setAssigneePhone] = useState("");
+  const [generatedLink, setGeneratedLink] = useState("");
 
-  // CTO UPDATE: RBAC LOGIC
-  // Retrieve role to determine if user can manage tickets
-  const userRole = localStorage.getItem('user_role')?.toLowerCase() || 'citizen';
-  // CTO NOTE: Updated to include 'leader' and 'politician' per user request for write access
-  const canManage = ['osd', 'registrar', 'leader', 'politician'].includes(userRole);
+  // Configuration - Ideally from ENV, hardcoded for PRD compliance demonstration
+  const BOT_NUMBER = "919876543210"; 
 
   useEffect(() => {
     fetchGrievances();
-    // Poll every 30 seconds for real-time updates
-    const interval = setInterval(fetchGrievances, 30000);
-    return () => clearInterval(interval);
   }, []);
 
   const fetchGrievances = async () => {
     try {
       const token = localStorage.getItem('token');
-      // Fetch from backend - using /api/grievances/ for full list
       const response = await fetch(`${BACKEND_URL}/api/grievances/`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+        headers: { 'Authorization': `Bearer ${token}` }
       });
-      
       if (response.ok) {
         const data = await response.json();
-        
-        // CTO FIX: Robust Filter Logic
-        // We ensure case-insensitive matching and exclude 'Closed' as well.
-        const criticalData = data.filter(t => {
-          const priority = t.priority_level?.toUpperCase() || '';
-          const status = t.status?.toLowerCase()?.trim() || '';
-          
-          // 1. Must be CRITICAL or HIGH
-          const isHighPriority = priority === 'CRITICAL' || priority === 'HIGH';
-          
-          // 2. Must NOT be 'resolved' or 'closed'
-          const isResolved = status === 'resolved' || status === 'closed';
-          
-          return isHighPriority && !isResolved;
-        });
-        
-        setGrievances(criticalData);
+        setGrievances(data);
       }
     } catch (error) {
       console.error("Feed Error:", error);
-    } finally {
-      setLoading(false);
     }
   };
 
-  const handleAssign = (id) => {
-    // Logic to generate Deep Link
-    const link = `https://wa.me/?text=URGENT%20Task:%20Grievance%20${id}%20needs%20attention.`;
-    window.open(link, '_blank');
-    toast({
-      title: "Task Delegated",
-      description: "WhatsApp assignment link generated.",
-    });
+  // --- FEATURE B: DEEP LINK GENERATION LOGIC ---
+  const generateDeepLink = async () => {
+    if (!assigneePhone || assigneePhone.length < 10) {
+      toast.error("Invalid Number", { description: "Please enter a valid 10-digit mobile number." });
+      return;
+    }
+
+    const ticket = selectedTicket;
+    
+    // 1. Construct the Message as per PRD
+    const issueSummary = ticket.description.substring(0, 60);
+    const location = ticket.location || "Ward Unknown";
+    const deadline = ticket.priority === 'CRITICAL' ? '4 HOURS' : (ticket.priority === 'HIGH' ? '24 Hours' : '7 Days');
+    
+    // The "Magic String" format required by PRD
+    const messageText = `URGENT Task: ${issueSummary}... at ${location}. Priority: ${ticket.priority}. Deadline: ${deadline}. Click here to close: https://wa.me/${BOT_NUMBER}?text=Fixed_${ticket.id}`;
+    
+    // 2. Encode for URL
+    const encodedMessage = encodeURIComponent(messageText);
+    
+    // 3. Create the Universal WhatsApp Link
+    const link = `https://wa.me/${assigneePhone}?text=${encodedMessage}`;
+    
+    setGeneratedLink(link);
+
+    // 4. Optimistic Update (Update Backend)
+    try {
+        const token = localStorage.getItem('token');
+        await fetch(`${BACKEND_URL}/api/grievances/${ticket.id}/assign`, {
+            method: 'PUT',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ status: 'assigned', assigned_official_phone: assigneePhone })
+        });
+        toast.success("Official Assigned", { description: "Ticket status updated. Send the link now." });
+        fetchGrievances(); 
+    } catch (e) {
+        console.error("Assignment Sync Error", e);
+    }
+  };
+
+  const openWhatsAppSafe = () => {
+      // FIX FOR BLOCKED FRAME: Open in new tab with security tags
+      window.open(generatedLink, '_blank', 'noopener,noreferrer');
+  };
+
+  const copyToClipboard = () => {
+      navigator.clipboard.writeText(generatedLink);
+      toast.success("Copied!", { description: "Link copied to clipboard." });
+  };
+
+  // --- TIMEZONE FIX HELPER ---
+  const formatDeadline = (isoString) => {
+      if (!isoString) return "No Deadline";
+      const date = new Date(isoString);
+      // This automatically uses the browser's local timezone (IST)
+      return date.toLocaleString('en-IN', { 
+          month: 'short', 
+          day: 'numeric', 
+          hour: '2-digit', 
+          minute: '2-digit',
+          hour12: true 
+      });
   };
 
   return (
-    <Card className="col-span-1 h-[400px] flex flex-col border-orange-500/20 bg-slate-900/50 backdrop-blur">
-      <CardHeader className="pb-2">
-        <div className="flex justify-between items-center">
-          <CardTitle className="text-lg font-bold text-white flex items-center gap-2">
-            <AlertTriangle className="h-5 w-5 text-red-500" />
-            Active Fires
-            <Badge variant="outline" className="ml-2 border-red-500/50 text-red-400">
-              {grievances.length} Critical
-            </Badge>
-          </CardTitle>
-          {/* CTO NOTE: Visual Indicator of Mode */}
-          {!canManage && (
-            <Badge variant="secondary" className="bg-slate-800 text-slate-400 text-xs">
-              View Only
-            </Badge>
-          )}
-        </div>
-      </CardHeader>
-      <CardContent className="flex-1 overflow-hidden p-0">
-        <ScrollArea className="h-full px-4 pb-4">
-          {loading ? (
-             <div className="flex justify-center items-center h-40">
-               <Loader2 className="h-6 w-6 animate-spin text-orange-500" />
-             </div>
-          ) : grievances.length === 0 ? (
-            <div className="text-center text-slate-500 mt-10">
-              <CheckCircle className="h-8 w-8 mx-auto mb-2 opacity-50" />
-              <p>No critical issues active.</p>
+    <div className="space-y-4">
+      <h2 className="text-xl font-bold text-white flex items-center gap-2">
+        <AlertCircle className="h-5 w-5 text-orange-500" />
+        Briefing Room (Live Feed)
+      </h2>
+
+      <div className="grid gap-4">
+        {grievances.map((ticket) => (
+          <Card key={ticket.id} className="bg-slate-900 border-slate-800 hover:border-slate-700 transition-colors">
+            <CardContent className="p-4">
+              <div className="flex flex-col md:flex-row justify-between items-start gap-4">
+                <div className="space-y-1 flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Badge variant={ticket.priority === 'CRITICAL' ? 'destructive' : 'default'} className="uppercase text-[10px] tracking-wider font-bold">
+                      {ticket.priority}
+                    </Badge>
+                    <span className="text-slate-500 text-xs flex items-center gap-1 bg-slate-950 px-2 py-0.5 rounded border border-slate-800">
+                      <Clock className="h-3 w-3" /> Due: {formatDeadline(ticket.deadline_timestamp)}
+                    </span>
+                  </div>
+                  <p className="text-white font-medium text-sm leading-relaxed">{ticket.description}</p>
+                  <div className="flex items-center gap-4 text-xs text-slate-400 mt-3">
+                    <span className="flex items-center gap-1 text-blue-400"><MapPin className="h-3 w-3" /> {ticket.location || "Ward Unknown"}</span>
+                    <span className="flex items-center gap-1"><Phone className="h-3 w-3" /> {ticket.citizen_phone || "Hidden"}</span>
+                  </div>
+                </div>
+
+                {/* Action Button: OSD Flow */}
+                {ticket.status === 'pending' || ticket.status === 'open' ? (
+                  <Button 
+                    size="sm" 
+                    className="bg-blue-600 hover:bg-blue-700 text-white shrink-0 mt-2 md:mt-0 w-full md:w-auto"
+                    onClick={() => { setSelectedTicket(ticket); setGeneratedLink(""); setAssigneePhone(""); }}
+                  >
+                    Assign Official <ArrowRight className="ml-1 h-3 w-3" />
+                  </Button>
+                ) : (
+                  <Badge variant="outline" className="border-green-900 text-green-500 bg-green-900/10 mt-2 md:mt-0">
+                    {ticket.status === 'assigned' ? 'Assigned' : 'Resolved'}
+                  </Badge>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Assignment Modal (The Deep Link Engine) */}
+      <Dialog open={!!selectedTicket} onOpenChange={() => setSelectedTicket(null)}>
+        <DialogContent className="bg-slate-950 border-slate-800 text-white sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Assign Task #{selectedTicket?.id?.slice(0,4)}</DialogTitle>
+            <DialogDescription className="text-slate-400">
+              Select the Junior Engineer (JE) responsible for this ward.
+            </DialogDescription>
+          </DialogHeader>
+
+          {!generatedLink ? (
+            <div className="space-y-4 py-2">
+              <div className="space-y-2">
+                <Label>Official's Mobile Number (JE)</Label>
+                <div className="flex gap-2">
+                    <div className="bg-slate-900 border border-slate-800 flex items-center px-3 text-slate-400 text-sm rounded">+91</div>
+                    <Input 
+                    placeholder="9988776655" 
+                    className="bg-slate-900 border-slate-800 text-white"
+                    value={assigneePhone}
+                    onChange={(e) => setAssigneePhone(e.target.value)}
+                    maxLength={10}
+                    />
+                </div>
+              </div>
+              <Button onClick={generateDeepLink} className="w-full bg-orange-500 hover:bg-orange-600 font-bold">
+                Generate Deep Link
+              </Button>
             </div>
           ) : (
-            <div className="space-y-3 pt-2">
-              {grievances.map((ticket) => (
-                <div key={ticket.id} className="p-3 rounded-lg border border-slate-800 bg-slate-950/50 hover:bg-slate-900 transition-colors">
-                  <div className="flex justify-between items-start mb-2">
-                    <div className="space-y-1">
-                      <h4 className="font-medium text-slate-200 text-sm">{ticket.issue_type || ticket.title || 'Issue'}</h4>
-                      <div className="flex items-center gap-2 text-xs text-slate-400">
-                        <MapPin className="h-3 w-3" /> {ticket.village || ticket.location || "Unknown Loc"}
-                        <span className="text-slate-700">|</span>
-                        <Clock className="h-3 w-3" /> {new Date(ticket.created_at).toLocaleDateString()}
-                      </div>
-                    </div>
-                    <Badge className={
-                      ticket.priority_level?.toUpperCase() === 'CRITICAL' ? "bg-red-900/30 text-red-400 border-red-900" : "bg-orange-900/30 text-orange-400 border-orange-900"
-                    }>
-                      {ticket.priority_level}
-                    </Badge>
-                  </div>
-                  
-                  {ticket.description && (
-                    <p className="text-xs text-slate-500 line-clamp-2 mb-2">{ticket.description}</p>
-                  )}
-                  
-                  {/* CTO UPDATE: Only OSD/Registrar/Leader/Politician can see these buttons */}
-                  {canManage && (
-                    <div className="flex gap-2 mt-3">
-                      <Button 
-                        size="sm" 
-                        variant="outline" 
-                        className="w-full h-8 text-xs border-orange-500/30 text-orange-400 hover:bg-orange-950"
-                        onClick={() => handleAssign(ticket.id)}
-                        data-testid={`assign-btn-${ticket.id}`}
-                      >
-                        <Send className="h-3 w-3 mr-1" /> Assign Officer
-                      </Button>
-                    </div>
-                  )}
+            <div className="space-y-4 py-2">
+              <div className="p-3 bg-green-900/10 border border-green-900/50 rounded text-center">
+                <p className="text-green-400 text-xs font-bold mb-1 uppercase tracking-wider">Deep Link Generated</p>
+                <div className="text-[10px] text-slate-400 bg-black/30 p-2 rounded break-all font-mono">
+                    {generatedLink.substring(0, 60)}...
                 </div>
-              ))}
+              </div>
+              
+              <div className="grid grid-cols-2 gap-3">
+                  <Button 
+                    variant="outline"
+                    className="w-full border-slate-700 text-slate-300 hover:bg-slate-800"
+                    onClick={copyToClipboard}
+                  >
+                    <Copy className="h-4 w-4 mr-2" /> Copy Link
+                  </Button>
+                  <Button 
+                    className="w-full bg-[#25D366] hover:bg-[#20bd5a] text-white font-bold"
+                    onClick={openWhatsAppSafe}
+                  >
+                    <Send className="h-4 w-4 mr-2" /> WhatsApp
+                  </Button>
+              </div>
+              <p className="text-[10px] text-slate-500 text-center">
+                  *Clicking 'WhatsApp' opens a new tab to bypass browser security blocks.
+              </p>
             </div>
           )}
-        </ScrollArea>
-      </CardContent>
-    </Card>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 };
 
