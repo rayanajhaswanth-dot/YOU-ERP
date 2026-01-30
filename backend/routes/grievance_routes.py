@@ -178,3 +178,32 @@ async def get_grievance_stats(current_user: TokenData = Depends(get_current_user
         "in_progress": in_progress,
         "resolved": resolved
     }
+
+
+class AssignmentRequest(BaseModel):
+    status: str = "assigned"
+    assigned_official_phone: str
+
+@router.put("/{grievance_id}/assign")
+async def assign_grievance(
+    grievance_id: str,
+    data: AssignmentRequest,
+    current_user: TokenData = Depends(get_current_user)
+):
+    """
+    Feature B: Deep Link Assignment - Update ticket status and record assignee phone
+    """
+    supabase = get_supabase()
+    
+    existing = supabase.table('grievances').select('*').eq('id', grievance_id).eq('politician_id', current_user.politician_id).execute()
+    if not existing.data:
+        raise HTTPException(status_code=404, detail="Grievance not found")
+    
+    update_data = {
+        'status': data.status.upper(),
+        'assigned_to': data.assigned_official_phone,
+        'assigned_at': datetime.now(timezone.utc).isoformat()
+    }
+    
+    result = supabase.table('grievances').update(update_data).eq('id', grievance_id).execute()
+    return {"message": "Grievance assigned successfully", "assignee": data.assigned_official_phone}
