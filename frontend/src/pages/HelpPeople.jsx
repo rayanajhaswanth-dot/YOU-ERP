@@ -6,7 +6,7 @@ import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Textarea } from "../components/ui/textarea";
-import { Search, Filter, AlertTriangle, Plus, MapPin, BarChart3, Clock, Mic, ChevronDown, ChevronUp, CheckCircle, AlertCircle, List } from "lucide-react";
+import { Search, AlertTriangle, Plus, MapPin, BarChart3, Clock, Mic, ChevronDown, ChevronUp, CheckCircle, AlertCircle, List } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid } from 'recharts';
 import { toast } from "sonner";
 import VoiceRecorder from '../components/VoiceRecorder';
@@ -14,13 +14,42 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "../componen
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
-// 11-SECTOR GOVERNANCE FRAMEWORK
+// 11 GOVERNANCE CATEGORIES
 const CATEGORIES = [
     "Water & Irrigation", "Agriculture", "Forests & Environment", 
     "Health & Sanitation", "Education", "Infrastructure & Roads", 
     "Law & Order", "Welfare Schemes", "Finance & Taxation", 
     "Urban & Rural Development", "Miscellaneous"
 ];
+
+const CATEGORY_COLORS = {
+    "Water & Irrigation": "#3b82f6", 
+    "Agriculture": "#22c55e",
+    "Health & Sanitation": "#ef4444",
+    "Infrastructure & Roads": "#f97316",
+    "Law & Order": "#a855f7",
+    "Education": "#eab308",
+    "Welfare Schemes": "#ec4899",
+    "Forests & Environment": "#10b981",
+    "Finance & Taxation": "#06b6d4",
+    "Urban & Rural Development": "#8b5cf6",
+    "Miscellaneous": "#64748b"
+};
+
+// KPI Card Component
+const KpiCard = ({ title, value, icon: Icon, color }) => (
+    <Card className="bg-slate-900 border-slate-800">
+        <CardContent className="p-5 flex justify-between items-center">
+            <div>
+                <p className="text-slate-400 text-xs font-bold uppercase tracking-wider">{title}</p>
+                <p className={`text-3xl font-bold mt-1 ${color}`}>{value}</p>
+            </div>
+            <div className={`p-3 rounded-full bg-slate-800`}>
+                <Icon className={`h-6 w-6 ${color}`} />
+            </div>
+        </CardContent>
+    </Card>
+);
 
 const HelpPeople = () => {
   const [grievances, setGrievances] = useState([]);
@@ -36,7 +65,7 @@ const HelpPeople = () => {
     location: "",
     category: "Miscellaneous",
     description: "",
-    priority_level: "MEDIUM"
+    priority_level: "MEDIUM"  // Matches backend/DB column
   });
 
   useEffect(() => {
@@ -50,29 +79,23 @@ const HelpPeople = () => {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if(res.ok) setGrievances(await res.json());
-    } catch(e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
+    } catch(e) { 
+      console.error(e); 
+    } finally { 
+      setLoading(false); 
     }
   };
 
   const handleRegister = async () => {
     try {
         const token = localStorage.getItem('token');
-        
-        // Manual Priority Map based on 11-Sector Framework
-        let hours = 168;
-        if(formData.priority_level === 'CRITICAL') hours = 4;
-        else if(formData.priority_level === 'HIGH') hours = 24;
-        else if(formData.priority_level === 'MEDIUM') hours = 72;
-        
-        const deadline = new Date(Date.now() + hours * 3600000).toISOString();
-        const payload = {
-          village: formData.location || "Unknown Ward",
-          description: formData.description,
-          issue_type: formData.category,
-          ai_priority: formData.priority_level === 'CRITICAL' ? 10 : (formData.priority_level === 'HIGH' ? 8 : 5)
+        const deadlineHours = formData.priority_level === 'CRITICAL' ? 4 : (formData.priority_level === 'HIGH' ? 24 : 168);
+        const deadline = new Date(Date.now() + deadlineHours * 3600000).toISOString();
+
+        const payload = { 
+          ...formData, 
+          status: 'pending', 
+          deadline_timestamp: deadline 
         };
 
         const res = await fetch(`${BACKEND_URL}/api/grievances/`, {
@@ -89,8 +112,8 @@ const HelpPeople = () => {
         } else {
             toast.error("Registration Failed");
         }
-    } catch(e) {
-        toast.error("Registration Failed", { description: e.message });
+    } catch(e) { 
+        toast.error("Registration Failed", { description: e.message }); 
     }
   };
 
@@ -102,40 +125,26 @@ const HelpPeople = () => {
     return "LOW";
   };
 
-  // --- KPIS ---
-  const totalGrievances = grievances.length;
-  const resolvedCount = grievances.filter(g => g.status === 'resolved' || g.status === 'RESOLVED').length;
-  const pendingCount = grievances.filter(g => g.status !== 'resolved' && g.status !== 'RESOLVED').length;
-  const longPendingCount = grievances.filter(g => {
+  // KPIs
+  const total = grievances.length;
+  const resolved = grievances.filter(g => g.status === 'resolved' || g.status === 'RESOLVED').length;
+  const pending = grievances.filter(g => g.status !== 'resolved' && g.status !== 'RESOLVED').length;
+  const longPending = grievances.filter(g => {
       if (g.status === 'resolved' || g.status === 'RESOLVED') return false;
-      const diffDays = Math.ceil(Math.abs(new Date() - new Date(g.created_at)) / (1000 * 60 * 60 * 24)); 
-      return diffDays > 7;
+      return Math.ceil(Math.abs(new Date() - new Date(g.created_at)) / (86400000)) > 7;
   }).length;
 
   const topCritical = grievances
-    .filter(g => (g.priority_level === 'CRITICAL' || g.priority === 'CRITICAL') && g.status !== 'resolved' && g.status !== 'RESOLVED')
-    .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+    .filter(g => g.priority_level === 'CRITICAL' && g.status !== 'resolved' && g.status !== 'RESOLVED')
     .slice(0, 3);
 
-  const getCategoryData = () => {
-      const counts = {};
-      grievances.forEach(g => {
-          const cat = g.category || g.issue_type || "Miscellaneous";
-          counts[cat] = (counts[cat] || 0) + 1;
-      });
-      return Object.keys(counts)
-        .map(key => ({ name: key, count: counts[key] }))
-        .sort((a, b) => b.count - a.count)
-        .slice(0, 5);
-  };
-
+  // Filtered List
   const filteredList = grievances.filter(g => 
     (g.citizen_name || g.village || "").toLowerCase().includes(filterText.toLowerCase()) ||
-    (g.location || g.village || "").toLowerCase().includes(filterText.toLowerCase()) ||
-    (g.id || "").includes(filterText)
+    (g.category || g.issue_type || "").toLowerCase().includes(filterText.toLowerCase())
   );
 
-  // Sorting
+  // Sorted List
   const sortedList = [...filteredList].sort((a, b) => {
     if (sortBy === "priority") {
       const priorityOrder = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
@@ -147,103 +156,83 @@ const HelpPeople = () => {
     return 0;
   });
 
+  const getGraphData = () => {
+      const counts = {};
+      grievances.forEach(g => {
+          const cat = g.category || g.issue_type || "Miscellaneous";
+          counts[cat] = (counts[cat] || 0) + 1;
+      });
+      return Object.keys(counts).map(k => ({ name: k, count: counts[k] })).sort((a,b) => b.count - a.count).slice(0, 5);
+  };
+
   return (
     <div className="p-6 space-y-8 text-white">
       
-      {/* HEADER */}
+      {/* Header */}
       <div className="flex items-center gap-3 border-b border-slate-800 pb-4">
-          <div className="p-2 bg-orange-900/20 rounded-lg">
-              <AlertTriangle className="h-8 w-8 text-orange-500" />
-          </div>
+          <AlertTriangle className="h-8 w-8 text-orange-500" />
           <div>
-              <h1 className="text-3xl font-bold tracking-tight">Help People Console</h1>
-              <p className="text-slate-400 text-sm">11-Sector Governance Framework</p>
+            <h1 className="text-3xl font-bold">Help People Console</h1>
+            <p className="text-slate-400 text-sm">Citizen Grievance Redressal</p>
           </div>
       </div>
 
       {/* 1. KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Card className="bg-slate-900 border-slate-800 hover:border-slate-700">
-              <CardContent className="p-5 flex justify-between items-center">
-                  <div><p className="text-slate-400 text-xs font-bold uppercase">Total</p><p className="text-3xl font-bold text-white">{totalGrievances}</p></div>
-                  <List className="h-8 w-8 text-blue-500 opacity-50" />
-              </CardContent>
-          </Card>
-          <Card className="bg-slate-900 border-slate-800 hover:border-slate-700">
-              <CardContent className="p-5 flex justify-between items-center">
-                  <div><p className="text-slate-400 text-xs font-bold uppercase">Resolved</p><p className="text-3xl font-bold text-green-400">{resolvedCount}</p></div>
-                  <CheckCircle className="h-8 w-8 text-green-500 opacity-50" />
-              </CardContent>
-          </Card>
-          <Card className="bg-slate-900 border-slate-800 hover:border-slate-700">
-              <CardContent className="p-5 flex justify-between items-center">
-                  <div><p className="text-slate-400 text-xs font-bold uppercase">Pending</p><p className="text-3xl font-bold text-yellow-400">{pendingCount}</p></div>
-                  <Clock className="h-8 w-8 text-yellow-500 opacity-50" />
-              </CardContent>
-          </Card>
-          <Card className="bg-slate-900 border-slate-800 hover:border-slate-700">
-              <CardContent className="p-5 flex justify-between items-center">
-                  <div><p className="text-slate-400 text-xs font-bold uppercase">Long Pending</p><p className="text-3xl font-bold text-red-400">{longPendingCount}</p></div>
-                  <AlertCircle className="h-8 w-8 text-red-500 opacity-50" />
-              </CardContent>
-          </Card>
+          <KpiCard title="Total" value={total} icon={List} color="text-blue-400" />
+          <KpiCard title="Resolved" value={resolved} icon={CheckCircle} color="text-green-400" />
+          <KpiCard title="Pending" value={pending} icon={Clock} color="text-yellow-400" />
+          <KpiCard title="Long Pending (>7 Days)" value={longPending} icon={AlertCircle} color="text-red-400" />
       </div>
 
-      {/* 2. TOP 3 CRITICAL */}
+      {/* 2. Top 3 Critical */}
       <div>
-          <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest border-b border-slate-800 pb-2 mb-3 flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4 text-red-500" /> Unresolved Critical Issues
-          </h3>
+          <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest border-b border-slate-800 pb-2 mb-3">Priority 1: Unresolved Critical</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {topCritical.length > 0 ? topCritical.map((issue) => (
-                  <Card key={issue.id} className="bg-gradient-to-br from-slate-900 to-red-950/20 border-red-900/30 border hover:border-red-500/50 transition-all group">
+              {topCritical.length > 0 ? topCritical.map(issue => (
+                  <Card key={issue.id} className="bg-red-950/20 border-red-900/50 border relative overflow-hidden">
+                      <div className="absolute top-0 right-0 p-2 opacity-20"><AlertTriangle className="h-16 w-16 text-red-500" /></div>
                       <CardHeader className="pb-2">
-                          <div className="flex justify-between items-start">
-                              <Badge className="bg-red-600 text-white">CRITICAL</Badge>
-                              <span className="text-xs text-red-400 font-mono">#{issue.id.slice(0,6)}</span>
+                          <div className="flex justify-between">
+                            <Badge className="bg-red-600 text-white">CRITICAL</Badge>
+                            <span className="text-xs text-red-300 font-mono">#{issue.id?.slice(0,6)}</span>
                           </div>
-                          <CardTitle className="text-white text-md mt-2 truncate">{issue.category || issue.issue_type}</CardTitle>
+                          <CardTitle className="text-white text-md mt-2 line-clamp-1">{issue.category || issue.issue_type}</CardTitle>
                       </CardHeader>
                       <CardContent>
-                          <p className="text-slate-300 text-sm line-clamp-2 mb-2">{issue.description}</p>
-                          <div className="flex items-center gap-2 text-xs text-slate-500"><MapPin className="h-3 w-3" /> {issue.location || issue.village}</div>
+                          <p className="text-slate-300 text-sm line-clamp-2">{issue.description}</p>
+                          <div className="flex items-center gap-2 text-xs text-slate-500 mt-2"><MapPin className="h-3 w-3" /> {issue.location || issue.village}</div>
                       </CardContent>
                   </Card>
-              )) : (
-                  <div className="col-span-3 p-6 border border-dashed border-slate-800 rounded-lg text-center text-slate-500 italic bg-slate-900/50">All critical issues resolved.</div>
-              )}
+              )) : <div className="col-span-3 p-4 text-center text-slate-500 border border-dashed border-slate-800 rounded">No critical issues.</div>}
           </div>
       </div>
 
-      {/* 3. ADD GRIEVANCE */}
+      {/* 3. Add Entry (Collapsible) */}
       <Collapsible open={isAddOpen} onOpenChange={setIsAddOpen} className="border border-slate-700/50 rounded-xl bg-slate-900 shadow-md">
           <CollapsibleTrigger className="w-full">
-              <div className="flex items-center justify-between p-5 bg-gradient-to-r from-slate-900 to-slate-800 hover:to-slate-900 transition-all cursor-pointer">
-                  <h3 className="text-white font-bold flex items-center gap-3 text-lg">
-                      <div className="bg-blue-600 rounded-full p-1"><Plus className="h-4 w-4 text-white" /></div> Register New Grievance
-                  </h3>
-                  {isAddOpen ? <ChevronUp className="h-5 w-5 text-slate-400" /> : <ChevronDown className="h-5 w-5 text-slate-400" />}
+              <div className="flex items-center justify-between p-5 cursor-pointer hover:bg-slate-800/50 transition-all">
+                  <h3 className="text-white font-bold flex items-center gap-3"><Plus className="h-5 w-5 text-blue-500" /> Register New Grievance</h3>
+                  {isAddOpen ? <ChevronUp className="text-slate-400" /> : <ChevronDown className="text-slate-400" />}
               </div>
           </CollapsibleTrigger>
           <CollapsibleContent>
-              <div className="p-6 border-t border-slate-800 space-y-6 bg-slate-950">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                      <div className="space-y-2"><Label className="text-white">Complainant Name</Label><Input className="bg-slate-900 border-slate-700 text-white" placeholder="Name" value={formData.citizen_name} onChange={(e) => setFormData({...formData, citizen_name: e.target.value})} /></div>
-                      <div className="space-y-2"><Label className="text-white">Contact</Label><Input className="bg-slate-900 border-slate-700 text-white" placeholder="+91..." value={formData.citizen_phone} onChange={(e) => setFormData({...formData, citizen_phone: e.target.value})} /></div>
-                      <div className="space-y-2"><Label className="text-white">Area</Label><Input className="bg-slate-900 border-slate-700 text-white" placeholder="Ward/Village" value={formData.location} onChange={(e) => setFormData({...formData, location: e.target.value})} /></div>
+              <div className="p-6 border-t border-slate-800 space-y-4 bg-slate-950">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div><Label className="text-white">Name</Label><Input className="bg-slate-900 border-slate-700 text-white" value={formData.citizen_name} onChange={e => setFormData({...formData, citizen_name: e.target.value})} /></div>
+                      <div><Label className="text-white">Contact</Label><Input className="bg-slate-900 border-slate-700 text-white" value={formData.citizen_phone} onChange={e => setFormData({...formData, citizen_phone: e.target.value})} /></div>
+                      <div><Label className="text-white">Area</Label><Input className="bg-slate-900 border-slate-700 text-white" value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})} /></div>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="space-y-2">
-                          <Label className="text-white">Category (11-Sector Framework)</Label>
-                          <Select onValueChange={(val) => {
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                          <Label className="text-white">Category</Label>
+                          <Select value={formData.category} onValueChange={(val) => {
                               const p = getCategoryPriority(val);
                               setFormData({...formData, category: val, priority_level: p});
                           }}>
-                              <SelectTrigger className="bg-slate-900 border-slate-700 text-white"><SelectValue placeholder="Select Category" /></SelectTrigger>
+                              <SelectTrigger className="bg-slate-900 border-slate-700 text-white"><SelectValue placeholder="Select" /></SelectTrigger>
                               <SelectContent className="bg-slate-900 border-slate-800 text-white max-h-[250px]">
-                                  {CATEGORIES.map(cat => (
-                                      <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                                  ))}
+                                  {CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                               </SelectContent>
                           </Select>
                           <p className="text-xs text-slate-500 mt-1">
@@ -254,92 +243,78 @@ const HelpPeople = () => {
                             }>{formData.priority_level}</Badge>
                           </p>
                       </div>
-                      <div className="space-y-2">
+                      <div className="relative">
                           <Label className="text-white">Description</Label>
-                          <div className="relative">
-                              <Textarea className="bg-slate-900 border-slate-700 text-white min-h-[100px] pr-12" placeholder="Details..." value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} />
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="ghost"
-                                className="absolute bottom-2 right-2 h-8 w-8 p-0 hover:bg-slate-800"
-                                onClick={() => setShowVoiceRecorder(true)}
-                              >
-                                <Mic className="h-4 w-4 text-orange-500" />
-                              </Button>
-                          </div>
+                          <Textarea className="bg-slate-900 border-slate-700 text-white h-24 pr-12" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} />
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            className="absolute bottom-2 right-2 h-8 w-8 p-0 hover:bg-slate-800"
+                            onClick={() => setShowVoiceRecorder(true)}
+                          >
+                            <Mic className="h-4 w-4 text-orange-500" />
+                          </Button>
                       </div>
                   </div>
-                  <div className="flex justify-end gap-4 pt-2">
-                      <Button variant="outline" className="border-slate-700 text-slate-300" onClick={() => setIsAddOpen(false)}>Cancel</Button>
-                      <Button onClick={handleRegister} className="bg-orange-600 hover:bg-orange-700 text-white font-bold">Register Ticket</Button>
-                  </div>
+                  <Button onClick={handleRegister} className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold">Register Ticket</Button>
               </div>
           </CollapsibleContent>
       </Collapsible>
 
-      {/* 4. SEARCH & GRAPH SPLIT */}
-      <div className="flex flex-col lg:flex-row gap-6 min-h-[500px]">
-          {/* LIST */}
-          <div className="flex-1 space-y-4">
-              <div className="flex gap-4 items-center bg-slate-900/50 p-4 rounded-xl border border-slate-800">
-                  <Search className="h-4 w-4 text-slate-500" />
-                  <Input className="bg-transparent border-none text-white focus-visible:ring-0 placeholder:text-slate-600 p-0" placeholder="Search grievances..." value={filterText} onChange={(e) => setFilterText(e.target.value)} />
-                  <div className="flex items-center gap-2 ml-auto">
-                    <Filter className="h-4 w-4 text-slate-500" />
-                    <Select onValueChange={setSortBy} defaultValue="priority">
-                      <SelectTrigger className="w-[130px] bg-slate-950 border-slate-700 text-white text-xs"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="priority">Priority</SelectItem>
-                        <SelectItem value="date">Date</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-              </div>
-              <div className="grid gap-3 max-h-[600px] overflow-y-auto pr-2">
-                  {sortedList.map((ticket) => (
-                      <div key={ticket.id} className="p-4 bg-slate-900 border border-slate-800 rounded-lg flex justify-between items-center hover:bg-slate-800/50 transition-all">
-                          <div>
-                              <div className="flex items-center gap-3">
-                                  <span className="text-white font-semibold">{ticket.citizen_name || ticket.village || "Anonymous"}</span>
-                                  <Badge variant="outline" className="text-[10px] text-slate-400 border-slate-700">{ticket.category || ticket.issue_type}</Badge>
-                                  <Badge className={
-                                    ticket.priority_level === 'CRITICAL' ? 'bg-red-600' : 
-                                    ticket.priority_level === 'HIGH' ? 'bg-orange-600' : 
-                                    ticket.priority_level === 'MEDIUM' ? 'bg-yellow-600' : 'bg-blue-600'
-                                  }>
-                                      {ticket.priority_level || 'LOW'}
-                                  </Badge>
-                              </div>
-                              <p className="text-sm text-slate-400 mt-1 line-clamp-1">{ticket.description}</p>
-                              <div className="flex gap-4 mt-2 text-xs text-slate-500 font-mono">
-                                  <span className="flex items-center gap-1"><MapPin className="h-3 w-3" /> {ticket.location || ticket.village}</span>
-                                  <span className={`uppercase font-bold ${ticket.status === 'resolved' || ticket.status === 'RESOLVED' ? 'text-green-500' : 'text-yellow-500'}`}>{ticket.status}</span>
-                              </div>
-                          </div>
-                          <Button variant="secondary" size="sm" className="bg-slate-800 text-white">Manage</Button>
-                      </div>
-                  ))}
-              </div>
-          </div>
+      {/* 4. Search & Filter */}
+      <div className="flex gap-4 items-center bg-slate-900/50 p-4 rounded-xl border border-slate-800">
+          <Search className="h-4 w-4 text-slate-500" />
+          <Input className="bg-transparent border-none text-white focus-visible:ring-0" placeholder="Search..." value={filterText} onChange={e => setFilterText(e.target.value)} />
+          <Select onValueChange={setSortBy} defaultValue="priority">
+            <SelectTrigger className="w-[130px] bg-slate-950 border-slate-700 text-white text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="priority">Priority</SelectItem>
+              <SelectItem value="date">Date</SelectItem>
+            </SelectContent>
+          </Select>
+      </div>
 
-          {/* ANALYTICS GRAPH */}
+      {/* 5. Split View */}
+      <div className="flex flex-col lg:flex-row gap-6 min-h-[500px]">
+          {/* List */}
+          <div className="flex-1 space-y-3 max-h-[600px] overflow-y-auto pr-2">
+              {sortedList.map(t => (
+                  <div key={t.id} className="p-4 bg-slate-900 border border-slate-800 rounded-lg flex justify-between items-center hover:bg-slate-800/50">
+                      <div>
+                          <div className="flex items-center gap-3">
+                              <span className="text-white font-semibold">{t.citizen_name || t.village || "Anonymous"}</span>
+                              <Badge variant="outline" className="text-slate-400 border-slate-700">{t.category || t.issue_type}</Badge>
+                              <Badge className={
+                                t.priority_level === 'CRITICAL' ? 'bg-red-600' : 
+                                t.priority_level === 'HIGH' ? 'bg-orange-600' : 
+                                t.priority_level === 'MEDIUM' ? 'bg-yellow-600' : 'bg-blue-600'
+                              }>{t.priority_level || 'LOW'}</Badge>
+                          </div>
+                          <p className="text-sm text-slate-400 mt-1 line-clamp-1">{t.description}</p>
+                          <div className="flex gap-4 mt-2 text-xs text-slate-500">
+                            <span className="flex items-center gap-1"><MapPin className="h-3 w-3" /> {t.location || t.village}</span>
+                            <span className={`uppercase font-bold ${t.status === 'resolved' || t.status === 'RESOLVED' ? 'text-green-500' : 'text-yellow-500'}`}>{t.status}</span>
+                          </div>
+                      </div>
+                      <Button variant="secondary" size="sm" className="bg-slate-800">Manage</Button>
+                  </div>
+              ))}
+          </div>
+          
+          {/* Graph */}
           <div className="w-full lg:w-[450px]">
-              <Card className="bg-slate-900 border-slate-800 h-full sticky top-6 shadow-xl">
-                  <CardHeader className="border-b border-slate-800 pb-4">
-                      <CardTitle className="text-md text-white flex items-center gap-2"><BarChart3 className="h-5 w-5 text-purple-500" /> Sector Analysis</CardTitle>
-                  </CardHeader>
-                  <CardContent className="h-[400px] pt-6">
+              <Card className="bg-slate-900 border-slate-800 h-full">
+                  <CardHeader className="border-b border-slate-800 pb-2"><CardTitle className="text-white text-sm flex gap-2"><BarChart3 className="h-4 w-4 text-purple-500"/> Sector Analysis</CardTitle></CardHeader>
+                  <CardContent className="h-[400px] pt-4">
                       <ResponsiveContainer width="100%" height="100%">
-                          <BarChart data={getCategoryData()} layout="vertical" margin={{ left: 10, right: 30 }}>
+                          <BarChart data={getGraphData()} layout="vertical" margin={{left:10}}>
                               <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#1e293b" />
                               <XAxis type="number" hide />
-                              <YAxis dataKey="name" type="category" width={130} tick={{fill: '#e2e8f0', fontSize: 12, fontWeight: 500}} interval={0} axisLine={false} tickLine={false} />
-                              <Tooltip cursor={{fill: '#1e293b', opacity: 0.4}} contentStyle={{backgroundColor: '#020617', border: '1px solid #1e293b', color: '#fff', borderRadius: '8px'}} />
-                              <Bar dataKey="count" radius={[0, 4, 4, 0]} barSize={20}>
-                                  {getCategoryData().map((entry, index) => (
-                                      <Cell key={`cell-${index}`} fill={['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981'][index % 5]} />
-                                  ))}
+                              <YAxis dataKey="name" type="category" width={120} tick={{fill:'#e2e8f0', fontSize:11}} interval={0} axisLine={false} tickLine={false} />
+                              <Tooltip cursor={{fill:'#1e293b', opacity:0.4}} contentStyle={{backgroundColor:'#020617', border:'1px solid #1e293b', color:'#fff'}} />
+                              <Bar dataKey="count" radius={[0,4,4,0]} barSize={24}>
+                                  {getGraphData().map((e,i) => <Cell key={i} fill={CATEGORY_COLORS[e.name] || '#64748b'} />)}
                               </Bar>
                           </BarChart>
                       </ResponsiveContainer>
@@ -360,7 +335,6 @@ const HelpPeople = () => {
           onClose={() => setShowVoiceRecorder(false)}
         />
       )}
-
     </div>
   );
 };
