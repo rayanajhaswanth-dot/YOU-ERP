@@ -220,3 +220,154 @@ async def assign_grievance(
     
     result = supabase.table('grievances').update(update_data).eq('id', grievance_id).execute()
     return {"message": "Grievance assigned successfully", "assignee": data.assigned_official_phone}
+
+
+# ==============================================================================
+# 10-STEP WORKFLOW: Resolution Endpoints
+# ==============================================================================
+
+class StartWorkRequest(BaseModel):
+    notes: Optional[str] = None
+
+@router.put("/{grievance_id}/start-work")
+async def start_work(
+    grievance_id: str,
+    data: StartWorkRequest = None,
+    current_user: TokenData = Depends(get_current_user)
+):
+    """
+    Step 8: OSD/PA clicks 'Start Work' - Updates status to IN_PROGRESS
+    """
+    supabase = get_supabase()
+    
+    existing = supabase.table('grievances').select('*').eq('id', grievance_id).eq('politician_id', current_user.politician_id).execute()
+    if not existing.data:
+        raise HTTPException(status_code=404, detail="Grievance not found")
+    
+    update_data = {
+        'status': 'IN_PROGRESS'
+    }
+    if data and data.notes:
+        update_data['resolution_notes'] = data.notes
+    
+    supabase.table('grievances').update(update_data).eq('id', grievance_id).execute()
+    
+    return {"message": "Work started on grievance", "status": "IN_PROGRESS"}
+
+
+class UploadResolutionRequest(BaseModel):
+    resolution_image_url: str
+    notes: Optional[str] = None
+
+@router.put("/{grievance_id}/upload-resolution-photo")
+async def upload_resolution_photo(
+    grievance_id: str,
+    data: UploadResolutionRequest,
+    current_user: TokenData = Depends(get_current_user)
+):
+    """
+    Step 8: Upload photo verification before marking resolved
+    """
+    supabase = get_supabase()
+    
+    existing = supabase.table('grievances').select('*').eq('id', grievance_id).eq('politician_id', current_user.politician_id).execute()
+    if not existing.data:
+        raise HTTPException(status_code=404, detail="Grievance not found")
+    
+    update_data = {
+        'resolution_image_url': data.resolution_image_url
+    }
+    if data.notes:
+        update_data['resolution_notes'] = data.notes
+    
+    supabase.table('grievances').update(update_data).eq('id', grievance_id).execute()
+    
+    return {"message": "Resolution photo uploaded", "can_resolve": True}
+
+
+class ResolveRequest(BaseModel):
+    send_notification: bool = True
+    notes: Optional[str] = None
+
+@router.put("/{grievance_id}/resolve")
+async def resolve_grievance(
+    grievance_id: str,
+    data: ResolveRequest = None,
+    current_user: TokenData = Depends(get_current_user)
+):
+    """
+    Step 8-9: Mark grievance as resolved (requires photo verification first)
+    Optionally sends WhatsApp notification to citizen requesting feedback
+    """
+    supabase = get_supabase()
+    
+    existing = supabase.table('grievances').select('*').eq('id', grievance_id).eq('politician_id', current_user.politician_id).execute()
+    if not existing.data:
+        raise HTTPException(status_code=404, detail="Grievance not found")
+    
+    grievance = existing.data[0]
+    
+    # Check if resolution photo exists
+    if not grievance.get('resolution_image_url'):
+        raise HTTPException(status_code=400, detail="Photo verification required before resolving. Please upload a resolution photo first.")
+    
+    update_data = {
+        'status': 'RESOLVED',
+        'resolved_at': datetime.now(timezone.utc).isoformat()
+    }
+    if data and data.notes:
+        update_data['resolution_notes'] = data.notes
+    
+    supabase.table('grievances').update(update_data).eq('id', grievance_id).execute()
+    
+    # Send WhatsApp notification if requested
+    notification_sent = False
+    if data and data.send_notification:
+        citizen_phone = grievance.get('citizen_phone')
+        if citizen_phone:
+            try:
+                import httpx
+                backend_url = "http://localhost:8001"
+                async with httpx.AsyncClient() as client:
+                    await client.post(
+                        f"{backend_url}/api/whatsapp/send-resolution",
+                        params={"grievance_id": grievance_id},
+                        timeout=10.0
+                    )
+                notification_sent = True
+            except Exception as e:
+                print(f"⚠️ Failed to send resolution notification: {e}")
+    
+    return {
+        "message": "Grievance resolved successfully",
+        "status": "RESOLVED",
+        "notification_sent": notification_sent
+    }
+
+
+class FeedbackRequest(BaseModel):
+    rating: int
+
+@router.put("/{grievance_id}/feedback")
+async def record_feedback(
+    grievance_id: str,
+    data: FeedbackRequest,
+    current_user: TokenData = Depends(get_current_user)
+):
+    """
+    Step 10: Record citizen feedback rating (1-5)
+    """
+    if data.rating < 1 or data.rating > 5:
+        raise HTTPException(status_code=400, detail="Rating must be between 1 and 5")
+    
+    supabase = get_supabase()
+    
+    existing = supabase.table('grievances').select('*').eq('id', grievance_id).eq('politician_id', current_user.politician_id).execute()
+    if not existing.data:
+        raise HTTPException(status_code=404, detail="Grievance not found")
+    
+    supabase.table('grievances').update({
+        'feedback_rating': data.rating
+    }).eq('id', grievance_id).execute()
+    
+    return {"message": "Feedback recorded", "rating": data.rating}
