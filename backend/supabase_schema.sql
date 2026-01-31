@@ -49,9 +49,12 @@ CREATE TABLE IF NOT EXISTS grievances (
     ai_priority INTEGER DEFAULT 5,
     media_url TEXT,
     
-    -- Assignment & Resolution
+    -- Assignment & Resolution (10-Step Workflow)
     assigned_official_phone TEXT,
     assigned_to UUID REFERENCES users(id),
+    resolution_image_url TEXT,           -- Photo verification image
+    feedback_rating INTEGER CHECK (feedback_rating >= 1 AND feedback_rating <= 5),  -- 1-5 rating from citizen
+    language_preference TEXT DEFAULT 'en',  -- For multi-lingual responses
     
     -- Legacy/Compatibility
     priority INTEGER DEFAULT 5,
