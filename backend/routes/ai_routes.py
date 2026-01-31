@@ -430,8 +430,14 @@ def analyze_priority_v2(request: GrievanceAnalysis):
         deadline_hours = 2
 
     return {
-        "priority": priority,
+        "priority_level": priority,
         "category": final_category,
         "deadline_hours": deadline_hours,
         "reason": f"Classified under {final_category}"
     }
+
+# Keep legacy endpoint for backward compatibility
+@router.post("/analyze_priority")
+def analyze_priority_main(request: GrievanceAnalysis):
+    """Alias for analyze_priority_v2"""
+    return analyze_priority_v2(request)
