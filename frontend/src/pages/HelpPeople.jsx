@@ -364,6 +364,19 @@ const HelpPeople = () => {
 
       </div>
 
+      {/* Voice Recorder Modal */}
+      {showVoiceRecorder && (
+        <VoiceRecorder 
+          onTranscriptionComplete={(result) => {
+            if (result?.text) {
+              setFormData(prev => ({...prev, description: result.text}));
+            }
+            setShowVoiceRecorder(false);
+          }}
+          onClose={() => setShowVoiceRecorder(false)}
+        />
+      )}
+
     </div>
   );
 };
