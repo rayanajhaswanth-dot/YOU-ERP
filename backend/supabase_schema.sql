@@ -21,13 +21,23 @@ CREATE TABLE IF NOT EXISTS users (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Grievances table (Updated with AI Reality Matrix fields)
+-- Grievances table (Updated with Help People Console fields)
 CREATE TABLE IF NOT EXISTS grievances (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     politician_id UUID REFERENCES politicians(id),
+    
+    -- Citizen Info (Help People Console)
+    citizen_name TEXT DEFAULT 'Anonymous Citizen',
+    citizen_phone TEXT,
+    location TEXT DEFAULT 'Unknown Ward',
+    category TEXT DEFAULT 'General',
+    
+    -- Legacy name mappings
     constituent_name TEXT DEFAULT 'Anonymous Citizen',
     phone TEXT,
     village TEXT DEFAULT 'Unknown',
+    
+    -- Core Content
     description TEXT NOT NULL,
     message TEXT,
     source TEXT DEFAULT 'whatsapp',
@@ -39,24 +49,30 @@ CREATE TABLE IF NOT EXISTS grievances (
     ai_priority INTEGER DEFAULT 5,
     media_url TEXT,
     
+    -- Assignment & Resolution
+    assigned_official_phone TEXT,
+    assigned_to UUID REFERENCES users(id),
+    
     -- Legacy/Compatibility
     priority INTEGER DEFAULT 5,
-    status TEXT DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'IN_PROGRESS', 'RESOLVED', 'pending', 'in_progress', 'resolved')),
+    status TEXT DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'IN_PROGRESS', 'RESOLVED', 'ASSIGNED', 'pending', 'in_progress', 'resolved', 'assigned')),
     resolution_notes TEXT,
-    assigned_to UUID REFERENCES users(id),
     created_by UUID REFERENCES users(id),
     created_at TIMESTAMPTZ DEFAULT NOW(),
     resolved_at TIMESTAMPTZ
 );
 
 -- Migration: Add new columns if table already exists (run these if upgrading)
+-- ALTER TABLE grievances ADD COLUMN IF NOT EXISTS citizen_name TEXT DEFAULT 'Anonymous Citizen';
+-- ALTER TABLE grievances ADD COLUMN IF NOT EXISTS citizen_phone TEXT;
+-- ALTER TABLE grievances ADD COLUMN IF NOT EXISTS location TEXT DEFAULT 'Unknown Ward';
+-- ALTER TABLE grievances ADD COLUMN IF NOT EXISTS category TEXT DEFAULT 'General';
+-- ALTER TABLE grievances ADD COLUMN IF NOT EXISTS assigned_official_phone TEXT;
 -- ALTER TABLE grievances ADD COLUMN IF NOT EXISTS priority_level TEXT DEFAULT 'LOW';
 -- ALTER TABLE grievances ADD COLUMN IF NOT EXISTS deadline_timestamp TIMESTAMPTZ;
 -- ALTER TABLE grievances ADD COLUMN IF NOT EXISTS issue_type TEXT DEFAULT 'Other';
 -- ALTER TABLE grievances ADD COLUMN IF NOT EXISTS ai_priority INTEGER DEFAULT 5;
 -- ALTER TABLE grievances ADD COLUMN IF NOT EXISTS media_url TEXT;
--- ALTER TABLE grievances ADD COLUMN IF NOT EXISTS village TEXT DEFAULT 'Unknown';
--- ALTER TABLE grievances ADD COLUMN IF NOT EXISTS description TEXT;
 
 -- Posts table
 CREATE TABLE IF NOT EXISTS posts (
