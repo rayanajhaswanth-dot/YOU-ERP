@@ -6,7 +6,7 @@ import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Textarea } from "../components/ui/textarea";
-import { Search, Filter, AlertTriangle, Plus, MapPin, BarChart3, Clock } from "lucide-react";
+import { Search, Filter, AlertTriangle, Plus, MapPin, BarChart3, Clock, Mic } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { toast } from "sonner";
 import VoiceRecorder from '../components/VoiceRecorder';
@@ -18,6 +18,7 @@ const HelpPeople = () => {
   const [loading, setLoading] = useState(true);
   const [filterText, setFilterText] = useState("");
   const [sortBy, setSortBy] = useState("priority");
+  const [showVoiceRecorder, setShowVoiceRecorder] = useState(false);
 
   // Form State (Logic 11)
   const [formData, setFormData] = useState({
