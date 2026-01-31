@@ -9,15 +9,22 @@ import uuid
 router = APIRouter()
 
 class GrievanceCreate(BaseModel):
-    village: str
+    citizen_name: Optional[str] = "Anonymous"
+    citizen_phone: Optional[str] = None
+    location: Optional[str] = None
+    village: Optional[str] = None  # Legacy field
+    category: Optional[str] = "Miscellaneous"
     description: str
-    issue_type: str = "Other"
+    issue_type: Optional[str] = "Other"  # Legacy field
+    priority_level: Optional[str] = "MEDIUM"
     ai_priority: Optional[int] = 5
+    deadline_timestamp: Optional[str] = None
 
 class GrievanceUpdate(BaseModel):
     status: Optional[str] = None
     resolution_notes: Optional[str] = None
     assigned_to: Optional[str] = None
+    priority_level: Optional[str] = None
 
 @router.post("/")
 async def create_grievance(
@@ -30,13 +37,19 @@ async def create_grievance(
     supabase = get_supabase()
     grievance_id = str(uuid.uuid4())
     
+    # Use location or village for backward compatibility
+    location_value = data.location or data.village or "Unknown"
+    # Use category or issue_type for backward compatibility
+    category_value = data.category or data.issue_type or "Miscellaneous"
+    
     grievance_data = {
         'id': grievance_id,
         'politician_id': current_user.politician_id,
-        'village': data.village,
+        'village': location_value,
         'description': data.description,
-        'issue_type': data.issue_type,
+        'issue_type': category_value,
         'ai_priority': data.ai_priority,
+        'priority_level': data.priority_level,
         'status': 'PENDING',
         'created_at': datetime.now(timezone.utc).isoformat()
     }
