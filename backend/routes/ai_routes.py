@@ -315,7 +315,7 @@ class ChatRequest(BaseModel):
 
 class GrievanceAnalysis(BaseModel):
     text: str
-    category: Optional[str] = "General"
+    category: Optional[str] = "Miscellaneous"
 
 # CONSTITUTIONAL AMBIT (Legislative vs Executive)
 OUT_OF_PURVIEW_KEYWORDS = [
@@ -323,6 +323,21 @@ OUT_OF_PURVIEW_KEYWORDS = [
     "divorce", "private dispute", "transfer", "promotion", "job offer",
     "personal financial help", "loan waiver"
 ]
+
+# 11 GOVERNANCE CATEGORIES (Keywords Mapping)
+CATEGORY_KEYWORDS = {
+    "Water & Irrigation": ["water", "irrigation", "canal", "borewell", "tank", "drinking", "pipeline"],
+    "Agriculture": ["crop", "seed", "farmer", "fertilizer", "msp", "drought", "harvest", "grain"],
+    "Forests & Environment": ["forest", "tree", "pollution", "waste", "dumping", "environment", "plastic"],
+    "Health & Sanitation": ["hospital", "doctor", "medicine", "dengue", "garbage", "sanitation", "clean", "drain", "mosquito"],
+    "Education": ["school", "college", "teacher", "student", "exam", "book", "scholarship", "midday meal"],
+    "Infrastructure & Roads": ["road", "pothole", "bridge", "building", "street light", "construction", "cement"],
+    "Law & Order": ["police", "theft", "crime", "safety", "fight", "harassment", "illegal"],
+    "Welfare Schemes": ["pension", "ration", "housing", "scheme", "aadhaar", "beneficiary", "support"],
+    "Finance & Taxation": ["tax", "funds", "budget", "finance", "gst"],
+    "Urban & Rural Development": ["panchayat", "municipality", "park", "community hall", "development", "permit"],
+    "Miscellaneous": []
+}
 
 OFFICIAL_INDIAN_LANGUAGES = {
     "hi": "Namaste",  # Hindi
@@ -356,17 +371,17 @@ def get_bot_response(request: ChatRequest):
     # 1. Greeting (Multi-Lingual)
     if any(x in msg for x in ["hi", "hello", "namaste", "start", "vanakkam"]):
         response_map = {
-            "te": "నమస్కారం! నేను మీ ఎమ్మెల్యే గారి ఆఫీస్ బాట్ ని. దయచేసి మీ సమస్యను టెక్స్ట్, ఫోటో లేదా ఆడియో ద్వారా పంపండి.",
-            "hi": "नमस्ते! मैं आपके विधायक का कार्यालय सहायक हूं। कृपया अपनी समस्या यहां टेक्स्ट, फोटो या ऑडियो के माध्यम से भेजें।",
+            "te": "నమస్కారం! నేను మీ ఎమ్మెల్యే గారి ఆఫీస్ బాట్ ని. దయచేసి మీ సమస్యను (నీరు, రోడ్లు, పెన్షన్, మొదలైనవి) పంపండి.",
+            "hi": "नमस्ते! मैं आपके विधायक का कार्यालय सहायक हूं। कृपया अपनी समस्या (पानी, सड़क, पेंशन, आदि) भेजें।",
             "ta": "வணக்கம்! நான் உங்கள் எம்.எல்.ஏ அலுவலக உதவியாளர். உங்கள் குறைகளை இங்கே பகிரவும்.",
-            "en": "Greetings! I am the AI Assistant to the Hon'ble MLA. Please send your grievance via Text, Image, or Audio to begin."
+            "en": "Greetings! I am the AI Assistant. Please share your grievance regarding categories like Water, Roads, Health, or Welfare."
         }
         return {"response": response_map.get(lang_code, response_map["en"])}
 
     # 2. Strict Purview Check (Legislative vs Private)
     if any(k in msg for k in OUT_OF_PURVIEW_KEYWORDS):
         return {
-            "response": "I apologize, but this request falls outside the constitutional purview of an MLA/MP office. We handle Civic Issues, Infrastructure, and Welfare Schemes. We cannot interfere in personal financial or legal matters."
+            "response": "I apologize, but personal financial or legal matters are outside the MLA/MP's purview. We handle Civic Issues, Infrastructure, and Welfare Schemes."
         }
 
     # 3. Informal vs Formal Query
@@ -374,45 +389,49 @@ def get_bot_response(request: ChatRequest):
         return {"response": "That sounds like a query regarding governance. Could you please specify the Scheme or Department? For grievances, please provide: Name, Area, and Issue Description."}
 
     # 4. Standard Acknowledgment for Grievance Input
-    return {"response": "Received. Please ensure you provide the location and urgency. I am registering this in the System."}
+    return {"response": "Received. I am categorizing your request under the relevant department (e.g., Health, Infrastructure) for immediate action."}
 
 @router.post("/analyze_priority_v2")
 def analyze_priority_v2(request: GrievanceAnalysis):
     """
-    Logic Flow 6: Enhanced Categorization & Priority Matrix
-    With category-based override support
+    Logic Flow 6: 11-Sector Governance Framework
+    Enhanced Categorization & Priority Matrix
     """
     text = request.text.lower()
-    cat_input = request.category.lower() if request.category else ""
+    user_cat = request.category
     
-    priority = "LOW"
-    deadline_hours = 168  # 7 Days default
+    # Detect Category based on Keywords
+    detected_category = "Miscellaneous"
+    for cat, keywords in CATEGORY_KEYWORDS.items():
+        if any(k in text for k in keywords):
+            detected_category = cat
+            break
+            
+    # If user manually selected a category, trust it, otherwise use detected
+    final_category = user_cat if user_cat and user_cat != "Miscellaneous" else detected_category
 
-    # Priority Matrix
-    if any(k in text for k in ["fire", "accident", "shock", "explosion", "collapse", "dengue", "current", "wire"]):
+    # Assign Priority based on Sector Criticality
+    priority = "MEDIUM"
+    deadline_hours = 168  # 7 Days
+
+    if final_category in ["Health & Sanitation", "Law & Order"]:
         priority = "CRITICAL"
         deadline_hours = 4
-    elif any(k in text for k in ["water", "electricity", "sewage", "power", "drinking", "supply"]):
+    elif final_category in ["Water & Irrigation", "Infrastructure & Roads", "Agriculture"]:
         priority = "HIGH"
         deadline_hours = 24
-    elif any(k in text for k in ["road", "pothole", "garbage", "street light", "drain", "cleaning"]):
+    elif final_category in ["Welfare Schemes", "Education"]:
         priority = "MEDIUM"
         deadline_hours = 72
         
-    # Override based on Dropdown Category
-    if priority == "LOW":
-        if "safety" in cat_input or "electric" in cat_input: 
-            priority = "CRITICAL"
-            deadline_hours = 4
-        elif "water" in cat_input: 
-            priority = "HIGH"
-            deadline_hours = 24
-        elif "sanitation" in cat_input or "road" in cat_input: 
-            priority = "MEDIUM"
-            deadline_hours = 72
+    # Contextual overrides (e.g., "Fire" is critical regardless of category)
+    if "fire" in text or "accident" in text or "shock" in text:
+        priority = "CRITICAL"
+        deadline_hours = 2
 
     return {
         "priority": priority,
+        "category": final_category,
         "deadline_hours": deadline_hours,
-        "reason": "Automated Classification based on Governance Matrix."
+        "reason": f"Classified under {final_category}"
     }
