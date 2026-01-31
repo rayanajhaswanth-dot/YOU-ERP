@@ -305,3 +305,114 @@ def analyze_priority(request: TranscriptionRequest):
         "deadline_timestamp": deadline_dt.isoformat(),  # Returns "2026-01-30T14:30:00+00:00"
         "reason": reason
     }
+
+
+# --- MULTI-LINGUAL LEGISLATIVE AI (Chat Bot Response) ---
+
+class ChatRequest(BaseModel):
+    message: str
+    sender_phone: Optional[str] = None
+
+class GrievanceAnalysis(BaseModel):
+    text: str
+    category: Optional[str] = "General"
+
+# CONSTITUTIONAL AMBIT (Legislative vs Executive)
+OUT_OF_PURVIEW_KEYWORDS = [
+    "personal loan", "money", "debt", "court case", "police bail", 
+    "divorce", "private dispute", "transfer", "promotion", "job offer",
+    "personal financial help", "loan waiver"
+]
+
+OFFICIAL_INDIAN_LANGUAGES = {
+    "hi": "Namaste",  # Hindi
+    "te": "Namaskaram",  # Telugu
+    "ta": "Vanakkam",  # Tamil
+    "kn": "Namaskara",  # Kannada
+    "ml": "Namaskaram",  # Malayalam
+    "bn": "Nomoshkar",  # Bengali
+    "mr": "Namaskar",  # Marathi
+    "gu": "Namaste",  # Gujarati
+    "pa": "Sat Sri Akal"  # Punjabi
+}
+
+def detect_language_script(text):
+    """Simple script detection for major Indian languages"""
+    if any('\u0900' <= c <= '\u097F' for c in text): return "hi"  # Devanagari
+    if any('\u0C00' <= c <= '\u0C7F' for c in text): return "te"  # Telugu
+    if any('\u0B80' <= c <= '\u0BFF' for c in text): return "ta"  # Tamil
+    if any('\u0C80' <= c <= '\u0CFF' for c in text): return "kn"  # Kannada
+    return "en"
+
+@router.post("/chat_response")
+def get_bot_response(request: ChatRequest):
+    """
+    Logic Flow 1-5: Strict Governance Conversationalist
+    Multi-lingual support with Legislative vs Executive guardrails
+    """
+    msg = request.message.lower()
+    lang_code = detect_language_script(request.message)
+    
+    # 1. Greeting (Multi-Lingual)
+    if any(x in msg for x in ["hi", "hello", "namaste", "start", "vanakkam"]):
+        response_map = {
+            "te": "నమస్కారం! నేను మీ ఎమ్మెల్యే గారి ఆఫీస్ బాట్ ని. దయచేసి మీ సమస్యను టెక్స్ట్, ఫోటో లేదా ఆడియో ద్వారా పంపండి.",
+            "hi": "नमस्ते! मैं आपके विधायक का कार्यालय सहायक हूं। कृपया अपनी समस्या यहां टेक्स्ट, फोटो या ऑडियो के माध्यम से भेजें।",
+            "ta": "வணக்கம்! நான் உங்கள் எம்.எல்.ஏ அலுவலக உதவியாளர். உங்கள் குறைகளை இங்கே பகிரவும்.",
+            "en": "Greetings! I am the AI Assistant to the Hon'ble MLA. Please send your grievance via Text, Image, or Audio to begin."
+        }
+        return {"response": response_map.get(lang_code, response_map["en"])}
+
+    # 2. Strict Purview Check (Legislative vs Private)
+    if any(k in msg for k in OUT_OF_PURVIEW_KEYWORDS):
+        return {
+            "response": "I apologize, but this request falls outside the constitutional purview of an MLA/MP office. We handle Civic Issues, Infrastructure, and Welfare Schemes. We cannot interfere in personal financial or legal matters."
+        }
+
+    # 3. Informal vs Formal Query
+    if "?" in msg or "how to" in msg:
+        return {"response": "That sounds like a query regarding governance. Could you please specify the Scheme or Department? For grievances, please provide: Name, Area, and Issue Description."}
+
+    # 4. Standard Acknowledgment for Grievance Input
+    return {"response": "Received. Please ensure you provide the location and urgency. I am registering this in the System."}
+
+@router.post("/analyze_priority_v2")
+def analyze_priority_v2(request: GrievanceAnalysis):
+    """
+    Logic Flow 6: Enhanced Categorization & Priority Matrix
+    With category-based override support
+    """
+    text = request.text.lower()
+    cat_input = request.category.lower() if request.category else ""
+    
+    priority = "LOW"
+    deadline_hours = 168  # 7 Days default
+
+    # Priority Matrix
+    if any(k in text for k in ["fire", "accident", "shock", "explosion", "collapse", "dengue", "current", "wire"]):
+        priority = "CRITICAL"
+        deadline_hours = 4
+    elif any(k in text for k in ["water", "electricity", "sewage", "power", "drinking", "supply"]):
+        priority = "HIGH"
+        deadline_hours = 24
+    elif any(k in text for k in ["road", "pothole", "garbage", "street light", "drain", "cleaning"]):
+        priority = "MEDIUM"
+        deadline_hours = 72
+        
+    # Override based on Dropdown Category
+    if priority == "LOW":
+        if "safety" in cat_input or "electric" in cat_input: 
+            priority = "CRITICAL"
+            deadline_hours = 4
+        elif "water" in cat_input: 
+            priority = "HIGH"
+            deadline_hours = 24
+        elif "sanitation" in cat_input or "road" in cat_input: 
+            priority = "MEDIUM"
+            deadline_hours = 72
+
+    return {
+        "priority": priority,
+        "deadline_hours": deadline_hours,
+        "reason": "Automated Classification based on Governance Matrix."
+    }
