@@ -5,6 +5,13 @@ A production-ready SaaS platform for Indian political leaders featuring AI-power
 
 ## Changelog
 
+### 2026-01-31
+- **CRITICAL FIX: `priority_level` Refactor Complete**: Fixed duplicate route definition in `ai_routes.py` that caused API to return `priority` instead of `priority_level`
+- **Backend API Verified**: `/api/ai/analyze_priority` now returns `priority_level`, `category`, `deadline_hours`, `reason`
+- **Full Stack Consistency**: Database schema (user-applied), backend API, and frontend all use `priority_level` correctly
+- **Help People Console Working**: KPI cards, critical issues section, grievance registration form, and grievance list all functional
+- **Tested End-to-End**: Login → Grievance creation → Priority assignment → Display flow verified
+
 ### 2025-01-29
 - **Campaign Analytics Module Complete**: Added `/analytics` route to App.js
 - **Analytics Page UI**: KPI cards (Total Reach, Total Engagement, Posts Tracked) + Recent Broadcasts list with detailed metrics (Reach, Likes, Comments)
