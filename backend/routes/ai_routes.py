@@ -337,8 +337,8 @@ def get_bot_response(request: ChatRequest):
     # 4. Standard Acknowledgment for Grievance Input
     return {"response": "Received. I am categorizing your request under the relevant department (e.g., Health, Infrastructure) for immediate action."}
 
-@router.post("/analyze_priority_v2")
-def analyze_priority_v2(request: GrievanceAnalysis):
+@router.post("/analyze_priority")
+def analyze_priority(request: GrievanceAnalysis):
     """
     Logic Flow 6: 11-Sector Governance Framework
     Enhanced Categorization & Priority Matrix
