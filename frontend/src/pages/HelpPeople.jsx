@@ -237,7 +237,13 @@ const HelpPeople = () => {
                   <div className="space-y-2 flex items-end">
                        <div className="w-full">
                           <Label className="mb-2 block">Voice Input</Label>
-                          <VoiceRecorder onTranscriptionComplete={(text) => setFormData(prev => ({...prev, description: text}))} />
+                          <Button 
+                            onClick={() => setShowVoiceRecorder(true)}
+                            variant="outline"
+                            className="w-full bg-slate-950 border-slate-700 hover:bg-slate-800"
+                          >
+                            <Mic className="h-4 w-4 mr-2" /> Record Voice
+                          </Button>
                        </div>
                   </div>
               </div>
