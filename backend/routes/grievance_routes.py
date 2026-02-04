@@ -365,3 +365,85 @@ async def record_feedback(
     }).eq('id', grievance_id).execute()
     
     return {"message": "Feedback recorded", "rating": data.rating}
+
+
+# ==============================================================================
+# FILE UPLOAD ENDPOINT
+# ==============================================================================
+from fastapi import UploadFile, File
+import os
+import httpx
+
+SUPABASE_URL = os.environ.get('SUPABASE_URL')
+SUPABASE_SERVICE_KEY = os.environ.get('SUPABASE_SERVICE_KEY')
+STORAGE_BUCKET = os.environ.get('STORAGE_BUCKET', 'Grievances')
+
+@router.post("/{grievance_id}/upload-file")
+async def upload_resolution_file(
+    grievance_id: str,
+    file: UploadFile = File(...),
+    current_user: TokenData = Depends(get_current_user)
+):
+    """
+    Upload resolution photo from device (not just URL)
+    """
+    supabase = get_supabase()
+    
+    existing = supabase.table('grievances').select('*').eq('id', grievance_id).eq('politician_id', current_user.politician_id).execute()
+    if not existing.data:
+        raise HTTPException(status_code=404, detail="Grievance not found")
+    
+    # Read file content
+    content = await file.read()
+    content_type = file.content_type or 'image/jpeg'
+    
+    # Generate unique filename
+    import random
+    import string
+    random_suffix = ''.join(random.choices(string.ascii_lowercase + string.digits, k=7))
+    extension = file.filename.split('.')[-1] if file.filename else 'jpg'
+    file_name = f"resolution/{int(datetime.now().timestamp())}_{random_suffix}.{extension}"
+    
+    # Upload to Supabase Storage
+    upload_url = f"{SUPABASE_URL}/storage/v1/object/{STORAGE_BUCKET}/{file_name}"
+    
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        upload_response = await client.post(
+            upload_url,
+            headers={
+                'Authorization': f'Bearer {SUPABASE_SERVICE_KEY}',
+                'Content-Type': content_type
+            },
+            content=content
+        )
+        
+        if upload_response.status_code not in [200, 201]:
+            raise HTTPException(status_code=500, detail=f"Upload failed: {upload_response.text}")
+        
+        # Generate signed URL
+        sign_url = f"{SUPABASE_URL}/storage/v1/object/sign/{STORAGE_BUCKET}/{file_name}"
+        sign_response = await client.post(
+            sign_url,
+            headers={
+                'Authorization': f'Bearer {SUPABASE_SERVICE_KEY}',
+                'Content-Type': 'application/json'
+            },
+            json={"expiresIn": 604800}
+        )
+        
+        if sign_response.status_code == 200:
+            sign_data = sign_response.json()
+            file_url = f"{SUPABASE_URL}/storage/v1{sign_data.get('signedURL', '')}"
+        else:
+            file_url = f"{SUPABASE_URL}/storage/v1/object/public/{STORAGE_BUCKET}/{file_name}"
+    
+    # Update grievance with resolution photo URL
+    supabase.table('grievances').update({
+        'resolution_image_url': file_url
+    }).eq('id', grievance_id).execute()
+    
+    return {
+        "message": "File uploaded successfully",
+        "url": file_url,
+        "can_resolve": True
+    }
