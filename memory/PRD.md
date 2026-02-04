@@ -12,11 +12,11 @@ A production-ready SaaS platform for Indian political leaders featuring AI-power
 - Drag-and-drop photo upload with file validation (image only, max 10MB)
 
 **Issue 2 FIXED - Voice Message Transcription:**
-- **ROOT CAUSE**: Was using direct OpenAI client with Emergent key, which doesn't work - OpenAI rejects `sk-emergent-*` keys
-- **FIX**: Now using `emergentintegrations.llm.openai.OpenAISpeechToText` class which properly handles the Emergent LLM key
-- Added proper async `await stt.transcribe()` call
-- Error messages now display in user's language (falls back to previous conversation language)
-- Added language preference lookup from previous grievances when voice message has no text
+- **ROOT CAUSE 1**: Direct OpenAI client incompatible with Emergent API Key format (`sk-emergent-*`)
+- **ROOT CAUSE 2**: WhatsApp sends voice messages in OGG/Opus format, but Whisper only supports: mp3, mp4, mpeg, mpga, m4a, wav, webm
+- **FIX 1**: Using `emergentintegrations.llm.openai.OpenAISpeechToText` class instead of direct OpenAI client
+- **FIX 2**: Installed FFmpeg and added OGG → MP3 conversion before transcription
+- **Updated Files**: `whatsapp_routes.py` and `ai_routes.py` both now use Emergent wrapper with FFmpeg conversion
 
 **Issue 3 FIXED - Category Mapping:**
 - Enhanced CATEGORY_KEYWORDS with more Indian language terms
