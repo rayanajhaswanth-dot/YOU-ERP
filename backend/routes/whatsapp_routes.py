@@ -648,6 +648,18 @@ async def process_message(phone: str, message: str, name: str, media_url: str = 
     
     # Detect language from message
     lang = detect_language(message)
+    
+    # If message is empty (voice only) or language not detected, check user's previous preference
+    if lang == "en" and (not message or len(message.strip()) < 3):
+        # Try to get language from user's previous grievances
+        try:
+            prev_grievance = supabase.table('grievances').select('language_preference').eq('citizen_phone', phone).order('created_at', desc=True).limit(1).execute()
+            if prev_grievance.data and prev_grievance.data[0].get('language_preference'):
+                lang = prev_grievance.data[0]['language_preference']
+                print(f"🌐 Using previous language preference: {lang}")
+        except:
+            pass
+    
     print(f"🌐 Detected language: {lang}")
     
     # Get or create constituent record
