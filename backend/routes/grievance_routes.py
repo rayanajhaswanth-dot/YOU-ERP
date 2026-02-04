@@ -247,8 +247,6 @@ async def start_work(
     update_data = {
         'status': 'IN_PROGRESS'
     }
-    if data and data.notes:
-        update_data['resolution_notes'] = data.notes
     
     supabase.table('grievances').update(update_data).eq('id', grievance_id).execute()
     
