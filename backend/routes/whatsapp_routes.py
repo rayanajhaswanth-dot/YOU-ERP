@@ -753,13 +753,12 @@ async def process_message(phone: str, message: str, name: str, media_url: str = 
                     except Exception as e:
                         print(f"⚠️ Storage upload failed: {e}")
                     
-                    # Process audio with IMPROVED Whisper handling
+                    # Process audio with Emergent Integrations Whisper
                     if is_audio:
                         try:
-                            # Use OpenAI client directly for better error handling
-                            import openai
+                            from emergentintegrations.llm.openai import OpenAISpeechToText
                             
-                            # Determine file extension
+                            # Determine file extension - WhatsApp sends .ogg (opus codec)
                             ext = 'ogg'
                             if 'mp3' in media_content_type or 'mpeg' in media_content_type:
                                 ext = 'mp3'
@@ -767,36 +766,44 @@ async def process_message(phone: str, message: str, name: str, media_url: str = 
                                 ext = 'wav'
                             elif 'amr' in media_content_type:
                                 ext = 'amr'
+                            elif 'opus' in media_content_type:
+                                ext = 'ogg'
+                            
+                            # WhatsApp voice messages are typically opus codec in ogg container
+                            # Whisper supports: mp3, mp4, mpeg, mpga, m4a, wav, webm
+                            # ogg/opus needs conversion or direct handling
                             
                             temp_path = f"/tmp/audio_{uuid.uuid4()}.{ext}"
                             with open(temp_path, 'wb') as f:
                                 f.write(media_obj['buffer'])
                             
-                            print(f"🎤 Audio saved to {temp_path}, size: {len(media_obj['buffer'])} bytes")
+                            file_size_kb = len(media_obj['buffer']) / 1024
+                            print(f"🎤 Audio saved to {temp_path}, size: {file_size_kb:.1f} KB, type: {media_content_type}")
                             
-                            # Use OpenAI client directly
-                            openai_client = openai.OpenAI(
-                                api_key=EMERGENT_LLM_KEY,
-                                base_url="https://api.openai.com/v1"
-                            )
+                            # Initialize Emergent Speech-to-Text
+                            stt = OpenAISpeechToText(api_key=EMERGENT_LLM_KEY)
                             
+                            # Transcribe using emergentintegrations
                             with open(temp_path, 'rb') as audio_file:
-                                transcript = openai_client.audio.transcriptions.create(
-                                    model="whisper-1",
+                                response = await stt.transcribe(
                                     file=audio_file,
-                                    response_format="text"
+                                    model="whisper-1",
+                                    response_format="json"
                                 )
                             
-                            voice_transcript = transcript.strip() if isinstance(transcript, str) else str(transcript)
+                            # Extract text from response
+                            voice_transcript = response.text if hasattr(response, 'text') else str(response)
+                            voice_transcript = voice_transcript.strip()
                             
                             if voice_transcript:
                                 message = voice_transcript
                                 lang = detect_language(message)
                                 print(f"🎤 Transcribed ({lang}): {voice_transcript[:100]}...")
                             else:
-                                print("⚠️ Empty transcription")
+                                print("⚠️ Empty transcription result")
                                 return get_response("voice_error", lang)
                             
+                            # Cleanup temp file
                             try:
                                 os.remove(temp_path)
                             except:
