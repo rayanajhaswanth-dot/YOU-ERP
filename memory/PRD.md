@@ -12,9 +12,11 @@ A production-ready SaaS platform for Indian political leaders featuring AI-power
 - Drag-and-drop photo upload with file validation (image only, max 10MB)
 
 **Issue 2 FIXED - Voice Message Transcription:**
-- Improved Whisper integration using direct OpenAI client
-- Better error handling with language-specific error messages
-- Detailed logging for debugging transcription failures
+- **ROOT CAUSE**: Was using direct OpenAI client with Emergent key, which doesn't work - OpenAI rejects `sk-emergent-*` keys
+- **FIX**: Now using `emergentintegrations.llm.openai.OpenAISpeechToText` class which properly handles the Emergent LLM key
+- Added proper async `await stt.transcribe()` call
+- Error messages now display in user's language (falls back to previous conversation language)
+- Added language preference lookup from previous grievances when voice message has no text
 
 **Issue 3 FIXED - Category Mapping:**
 - Enhanced CATEGORY_KEYWORDS with more Indian language terms
