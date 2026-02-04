@@ -1,9 +1,13 @@
 from fastapi import APIRouter, HTTPException, Depends
 from auth import get_current_user, TokenData
+from database import get_supabase
 import os
 import requests
 import asyncio
 from typing import List
+import sys
+sys.path.append('/app/backend')
+from services.sentiment_engine import analyze_social_sentiment, calculate_ground_stability
 
 router = APIRouter()
 
@@ -11,6 +15,7 @@ router = APIRouter()
 FB_PAGE_ACCESS_TOKEN = os.getenv("FACEBOOK_PAGE_ACCESS_TOKEN")
 FB_PAGE_ID = os.getenv("FACEBOOK_PAGE_ID")
 IG_ACCOUNT_ID = os.getenv("INSTAGRAM_ACCOUNT_ID")
+
 
 async def fetch_facebook_data():
     if not FB_PAGE_ACCESS_TOKEN or not FB_PAGE_ID:
@@ -67,6 +72,7 @@ async def fetch_facebook_data():
     except Exception as e:
         print(f"❌ [FB Analytics] Exception: {e}")
         return []
+
 
 async def fetch_instagram_data():
     if not FB_PAGE_ACCESS_TOKEN or not IG_ACCOUNT_ID:
@@ -143,6 +149,124 @@ async def fetch_instagram_data():
     except Exception as e:
         print(f"❌ [IG Analytics] Critical Exception: {e}")
         return []
+
+
+async def fetch_social_media_sentiment():
+    """
+    Fetch comments/reactions from Meta API and analyze sentiment.
+    """
+    if not FB_PAGE_ACCESS_TOKEN or not FB_PAGE_ID:
+        return {
+            "positive": 0,
+            "neutral": 0,
+            "negative": 0,
+            "overall": "Neutral",
+            "summary": "Social media not connected."
+        }
+    
+    try:
+        # Fetch recent posts with comments
+        url = f"https://graph.facebook.com/v18.0/{FB_PAGE_ID}/posts"
+        params = {
+            "access_token": FB_PAGE_ACCESS_TOKEN,
+            "fields": "id,message,created_time,comments{message},reactions.summary(total_count).type(LIKE),reactions.summary(total_count).type(LOVE),reactions.summary(total_count).type(HAHA),reactions.summary(total_count).type(WOW),reactions.summary(total_count).type(SAD),reactions.summary(total_count).type(ANGRY)",
+            "limit": 5
+        }
+        
+        response = await asyncio.to_thread(requests.get, url, params=params)
+        
+        if response.status_code != 200:
+            print(f"❌ [Sentiment] Failed to fetch posts: {response.text}")
+            return {"positive": 0, "neutral": 0, "negative": 0, "overall": "Neutral", "summary": "API error"}
+        
+        data = response.json()
+        posts = data.get("data", [])
+        
+        all_comments = []
+        total_reactions = {"like": 0, "love": 0, "haha": 0, "wow": 0, "sad": 0, "angry": 0}
+        post_context = ""
+        
+        for post in posts:
+            # Collect comments
+            comments_data = post.get("comments", {}).get("data", [])
+            for c in comments_data:
+                all_comments.append(c.get("message", ""))
+            
+            # Get post context
+            if not post_context:
+                post_context = post.get("message", "Political post")[:200]
+        
+        # Use sentiment engine
+        sentiment_result = await analyze_social_sentiment(post_context, all_comments, total_reactions)
+        
+        return {
+            "positive": sentiment_result.get("positive_count", 0),
+            "neutral": sentiment_result.get("neutral_count", 0),
+            "negative": sentiment_result.get("negative_count", 0),
+            "overall": sentiment_result.get("overall_sentiment", "Neutral"),
+            "summary": sentiment_result.get("narrative_summary", "")
+        }
+        
+    except Exception as e:
+        print(f"❌ [Sentiment] Exception: {e}")
+        return {"positive": 0, "neutral": 0, "negative": 0, "overall": "Neutral", "summary": str(e)}
+
+
+@router.get("/happiness_metrics")
+async def get_happiness_metrics(user: TokenData = Depends(get_current_user)):
+    """
+    Comprehensive Happiness Report metrics combining:
+    1. Ground Stability (SLA-based grievance resolution)
+    2. Digital Sentiment (Social media analysis)
+    3. Citizen Feedback (Star ratings)
+    """
+    user_role = user.role.lower() if user.role else "citizen"
+    if user_role not in ["leader", "osd", "politician"]:
+        raise HTTPException(status_code=403, detail="Access denied.")
+    
+    supabase = get_supabase()
+    
+    # Fetch grievances for ground stability
+    try:
+        grievances_result = supabase.table('grievances').select('*').eq('politician_id', user.politician_id).execute()
+        grievances = grievances_result.data or []
+    except Exception as e:
+        print(f"❌ [Happiness] Grievance fetch error: {e}")
+        grievances = []
+    
+    # Calculate ground stability (SLA metrics)
+    ground_metrics = calculate_ground_stability(grievances)
+    
+    # Fetch digital sentiment
+    digital_sentiment = await fetch_social_media_sentiment()
+    
+    # Calculate overall happiness score (0-100)
+    sla_score = ground_metrics.get("sla_percentage", 0)
+    rating_score = (ground_metrics.get("citizen_rating", 0) / 5) * 100  # Convert 5-star to percentage
+    
+    # Weight: 60% SLA, 40% Rating
+    overall_score = (sla_score * 0.6) + (rating_score * 0.4) if rating_score > 0 else sla_score
+    
+    return {
+        "overall_score": round(overall_score, 1),
+        "ground": {
+            "total_grievances": ground_metrics.get("total", 0),
+            "resolved": ground_metrics.get("resolved", 0),
+            "resolved_within_sla": ground_metrics.get("resolved_within_sla", 0),
+            "sla_percentage": round(ground_metrics.get("sla_percentage", 0), 1),
+            "status_label": ground_metrics.get("status_label", "No Data"),
+            "citizen_rating": round(ground_metrics.get("citizen_rating", 0), 1),
+            "rating_count": ground_metrics.get("rating_count", 0)
+        },
+        "digital": {
+            "positive": digital_sentiment.get("positive", 0),
+            "neutral": digital_sentiment.get("neutral", 0),
+            "negative": digital_sentiment.get("negative", 0),
+            "overall_sentiment": digital_sentiment.get("overall", "Neutral"),
+            "narrative": digital_sentiment.get("summary", "")
+        }
+    }
+
 
 @router.get("/campaigns")
 async def get_campaign_performance(user: TokenData = Depends(get_current_user)):
