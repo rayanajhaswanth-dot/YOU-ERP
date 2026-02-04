@@ -5,22 +5,28 @@ A production-ready SaaS platform for Indian political leaders featuring AI-power
 
 ## Changelog
 
-### 2026-02-04 (MAJOR UPDATE)
-- **COMPLETE WHATSAPP BOT REWRITE**: Fixed the bot to be conversationally intelligent:
-  - **Multi-lingual Support**: Detects Indian language scripts (Telugu నమస్కారం, Hindi नमस्ते, Tamil வணக்கம், Kannada, etc.) using Unicode ranges
-  - **AI Intent Detection**: Uses Gemini 2.0 Flash to classify messages as GREETING, QUERY, GRIEVANCE, FOLLOWUP, THANKS
-  - **Conversational Responses**: Bot now responds appropriately - answers scheme queries, handles greetings warmly, only registers actual grievances
-  - **Language-specific Templates**: Multi-lingual response templates for Telugu, Hindi, Tamil, English
-- **10-STEP GRIEVANCE WORKFLOW**: Complete implementation:
-  - Step 8a: `PUT /api/grievances/{id}/start-work` - Start Work (changes status to IN_PROGRESS)
-  - Step 8b: `PUT /api/grievances/{id}/upload-resolution-photo` - Photo Verification (required)
-  - Step 8c: `PUT /api/grievances/{id}/resolve` - Mark Resolved (requires photo first)
-  - Step 9: WhatsApp notification to citizen requesting feedback rating
-  - Step 10: `PUT /api/grievances/{id}/feedback` - Record 1-5 star rating
-- **FRONTEND GRIEVANCE MODAL**: New GrievanceModal component with:
-  - Workflow buttons that change based on status (Start Work → Upload Photo → Mark Resolved)
-  - Photo verification requirement enforced in UI
-  - Real-time status updates and toast notifications
+### 2026-02-04 (CRITICAL FIXES)
+**Issue 1 FIXED - File Upload from Device:**
+- Added `POST /api/grievances/{id}/upload-file` endpoint for direct file upload
+- Frontend now has toggle between "From Device" and "From URL" upload methods
+- Drag-and-drop photo upload with file validation (image only, max 10MB)
+
+**Issue 2 FIXED - Voice Message Transcription:**
+- Improved Whisper integration using direct OpenAI client
+- Better error handling with language-specific error messages
+- Detailed logging for debugging transcription failures
+
+**Issue 3 FIXED - Category Mapping:**
+- Enhanced CATEGORY_KEYWORDS with more Indian language terms
+- Added "Electricity" as separate category
+- Frontend normalizes "General" to "Miscellaneous" for display
+- Improved category detection algorithm (counts keyword matches)
+
+**Issue 4 FIXED - Mixed Language Responses:**
+- AI intent detection now explicitly requires responses in detected language only
+- Added `query_response` template for each language
+- No English text mixed in Telugu/Hindi/Tamil conversations
+- Added complete response templates for all message types in all languages
 
 ### 2026-01-31
 - **CRITICAL FIX: `priority_level` Refactor Complete**: Fixed duplicate route definition in `ai_routes.py`
