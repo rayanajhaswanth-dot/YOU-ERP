@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
@@ -6,7 +6,7 @@ import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Textarea } from "../components/ui/textarea";
-import { Search, AlertTriangle, Plus, MapPin, BarChart3, Clock, Mic, ChevronDown, ChevronUp, CheckCircle, AlertCircle, List, Play, Camera, Star, X, Image, Phone, User } from "lucide-react";
+import { Search, AlertTriangle, Plus, MapPin, BarChart3, Clock, Mic, ChevronDown, ChevronUp, CheckCircle, AlertCircle, List, Play, Camera, Star, X, Image, Phone, User, Upload } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid } from 'recharts';
 import { toast } from "sonner";
 import VoiceRecorder from '../components/VoiceRecorder';
@@ -19,7 +19,7 @@ const CATEGORIES = [
     "Water & Irrigation", "Agriculture", "Forests & Environment", 
     "Health & Sanitation", "Education", "Infrastructure & Roads", 
     "Law & Order", "Welfare Schemes", "Finance & Taxation", 
-    "Urban & Rural Development", "Miscellaneous"
+    "Urban & Rural Development", "Electricity", "Miscellaneous"
 ];
 
 const CATEGORY_COLORS = {
@@ -33,7 +33,9 @@ const CATEGORY_COLORS = {
     "Forests & Environment": "#10b981",
     "Finance & Taxation": "#06b6d4",
     "Urban & Rural Development": "#8b5cf6",
-    "Miscellaneous": "#64748b"
+    "Electricity": "#fbbf24",
+    "Miscellaneous": "#64748b",
+    "General": "#64748b"
 };
 
 // KPI Card Component
@@ -54,7 +56,10 @@ const KpiCard = ({ title, value, icon: Icon, color }) => (
 // Grievance Detail Modal with 10-Step Workflow
 const GrievanceModal = ({ grievance, onClose, onUpdate }) => {
   const [loading, setLoading] = useState(false);
+  const [uploadMethod, setUploadMethod] = useState('file'); // 'file' or 'url'
   const [photoUrl, setPhotoUrl] = useState('');
+  const [selectedFile, setSelectedFile] = useState(null);
+  const fileInputRef = useRef(null);
 
   if (!grievance) return null;
 
@@ -80,23 +85,64 @@ const GrievanceModal = ({ grievance, onClose, onUpdate }) => {
     setLoading(false);
   };
 
-  const handleUploadPhoto = async () => {
-    if (!photoUrl) {
-      toast.error("Please enter a photo URL");
-      return;
+  const handleFileSelect = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        toast.error("Please select an image file");
+        return;
+      }
+      // Validate file size (max 10MB)
+      if (file.size > 10 * 1024 * 1024) {
+        toast.error("File size must be less than 10MB");
+        return;
+      }
+      setSelectedFile(file);
+      toast.success(`Selected: ${file.name}`);
     }
+  };
+
+  const handleUploadPhoto = async () => {
     setLoading(true);
+    
     try {
-      const res = await fetch(`${BACKEND_URL}/api/grievances/${grievance.id}/upload-resolution-photo`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ resolution_image_url: photoUrl })
-      });
-      if (res.ok) {
-        toast.success("Photo uploaded successfully");
-        onUpdate();
+      if (uploadMethod === 'file' && selectedFile) {
+        // Upload file from device
+        const formData = new FormData();
+        formData.append('file', selectedFile);
+        
+        const res = await fetch(`${BACKEND_URL}/api/grievances/${grievance.id}/upload-file`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` },
+          body: formData
+        });
+        
+        if (res.ok) {
+          toast.success("Photo uploaded successfully from device!");
+          setSelectedFile(null);
+          onUpdate();
+        } else {
+          const err = await res.json();
+          toast.error(err.detail || "Failed to upload photo");
+        }
+      } else if (uploadMethod === 'url' && photoUrl) {
+        // Upload via URL
+        const res = await fetch(`${BACKEND_URL}/api/grievances/${grievance.id}/upload-resolution-photo`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({ resolution_image_url: photoUrl })
+        });
+        
+        if (res.ok) {
+          toast.success("Photo URL saved successfully!");
+          setPhotoUrl('');
+          onUpdate();
+        } else {
+          toast.error("Failed to save photo URL");
+        }
       } else {
-        toast.error("Failed to upload photo");
+        toast.error("Please select a file or enter a URL");
       }
     } catch(e) {
       toast.error("Error: " + e.message);
@@ -133,6 +179,9 @@ const GrievanceModal = ({ grievance, onClose, onUpdate }) => {
     'ASSIGNED': 'bg-purple-600'
   };
 
+  // Get display category
+  const displayCategory = grievance.category || grievance.issue_type || "General";
+
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
       <div className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -148,7 +197,7 @@ const GrievanceModal = ({ grievance, onClose, onUpdate }) => {
               }>{grievance.priority_level || 'LOW'}</Badge>
             </div>
             <h2 className="text-xl font-bold text-white">Ticket #{grievance.id?.slice(0,8).toUpperCase()}</h2>
-            <p className="text-slate-400 text-sm">{grievance.category || grievance.issue_type}</p>
+            <p className="text-slate-400 text-sm">{displayCategory}</p>
           </div>
           <Button variant="ghost" size="sm" onClick={onClose}>
             <X className="h-5 w-5 text-slate-400" />
@@ -161,7 +210,7 @@ const GrievanceModal = ({ grievance, onClose, onUpdate }) => {
           <div className="grid grid-cols-2 gap-4">
             <div className="flex items-center gap-2 text-slate-300">
               <User className="h-4 w-4 text-slate-500" />
-              <span>{grievance.citizen_name || grievance.village || "Anonymous"}</span>
+              <span>{grievance.citizen_name || grievance.village?.split('(')[0] || "Anonymous"}</span>
             </div>
             <div className="flex items-center gap-2 text-slate-300">
               <Phone className="h-4 w-4 text-slate-500" />
@@ -226,6 +275,7 @@ const GrievanceModal = ({ grievance, onClose, onUpdate }) => {
                 onClick={handleStartWork} 
                 disabled={loading}
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white mb-3"
+                data-testid="start-work-btn"
               >
                 <Play className="h-4 w-4 mr-2" /> Start Work
               </Button>
@@ -233,23 +283,76 @@ const GrievanceModal = ({ grievance, onClose, onUpdate }) => {
 
             {/* Step 8b: Upload Photo (required before resolve) */}
             {(status === 'IN_PROGRESS' || status === 'ASSIGNED') && !grievance.resolution_image_url && (
-              <div className="space-y-2 mb-3">
+              <div className="space-y-3 mb-3 bg-slate-800 p-4 rounded-lg">
+                <Label className="text-white text-sm">Upload Resolution Photo</Label>
+                
+                {/* Upload Method Toggle */}
                 <div className="flex gap-2">
-                  <Input 
-                    placeholder="Enter resolution photo URL..." 
-                    value={photoUrl}
-                    onChange={(e) => setPhotoUrl(e.target.value)}
-                    className="bg-slate-800 border-slate-700 text-white flex-1"
-                  />
                   <Button 
-                    onClick={handleUploadPhoto}
-                    disabled={loading || !photoUrl}
-                    className="bg-purple-600 hover:bg-purple-700"
+                    variant={uploadMethod === 'file' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setUploadMethod('file')}
+                    className={uploadMethod === 'file' ? 'bg-orange-600' : 'border-slate-600'}
                   >
-                    <Camera className="h-4 w-4 mr-2" /> Upload
+                    <Upload className="h-4 w-4 mr-1" /> From Device
+                  </Button>
+                  <Button 
+                    variant={uploadMethod === 'url' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setUploadMethod('url')}
+                    className={uploadMethod === 'url' ? 'bg-orange-600' : 'border-slate-600'}
+                  >
+                    <Image className="h-4 w-4 mr-1" /> From URL
                   </Button>
                 </div>
-                <p className="text-xs text-slate-500">Photo verification required before marking as resolved</p>
+                
+                {uploadMethod === 'file' ? (
+                  <div className="space-y-2">
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={handleFileSelect}
+                      accept="image/*"
+                      className="hidden"
+                    />
+                    <div 
+                      onClick={() => fileInputRef.current?.click()}
+                      className="border-2 border-dashed border-slate-600 rounded-lg p-6 text-center cursor-pointer hover:border-orange-500 transition-colors"
+                    >
+                      {selectedFile ? (
+                        <div className="text-green-400">
+                          <CheckCircle className="h-8 w-8 mx-auto mb-2" />
+                          <p className="font-medium">{selectedFile.name}</p>
+                          <p className="text-xs text-slate-400">{(selectedFile.size / 1024).toFixed(1)} KB</p>
+                        </div>
+                      ) : (
+                        <div className="text-slate-400">
+                          <Camera className="h-8 w-8 mx-auto mb-2" />
+                          <p>Click to select photo</p>
+                          <p className="text-xs">or drag and drop</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <Input 
+                    placeholder="Enter photo URL..." 
+                    value={photoUrl}
+                    onChange={(e) => setPhotoUrl(e.target.value)}
+                    className="bg-slate-900 border-slate-700 text-white"
+                  />
+                )}
+                
+                <Button 
+                  onClick={handleUploadPhoto}
+                  disabled={loading || (uploadMethod === 'file' ? !selectedFile : !photoUrl)}
+                  className="w-full bg-purple-600 hover:bg-purple-700"
+                  data-testid="upload-photo-btn"
+                >
+                  <Upload className="h-4 w-4 mr-2" /> 
+                  {loading ? 'Uploading...' : 'Upload Photo'}
+                </Button>
+                <p className="text-xs text-slate-500 text-center">Photo verification required before marking as resolved</p>
               </div>
             )}
 
@@ -259,6 +362,7 @@ const GrievanceModal = ({ grievance, onClose, onUpdate }) => {
                 onClick={handleResolve}
                 disabled={loading}
                 className="w-full bg-green-600 hover:bg-green-700 text-white"
+                data-testid="mark-resolved-btn"
               >
                 <CheckCircle className="h-4 w-4 mr-2" /> Mark Resolved & Notify Citizen
               </Button>
@@ -349,7 +453,7 @@ const HelpPeople = () => {
 
   // Category to Priority mapping (11-Sector Framework)
   const getCategoryPriority = (category) => {
-    if (["Law & Order", "Health & Sanitation"].includes(category)) return "CRITICAL";
+    if (["Law & Order", "Health & Sanitation", "Electricity"].includes(category)) return "CRITICAL";
     if (["Water & Irrigation", "Infrastructure & Roads", "Agriculture"].includes(category)) return "HIGH";
     if (["Welfare Schemes", "Education"].includes(category)) return "MEDIUM";
     return "LOW";
@@ -369,10 +473,16 @@ const HelpPeople = () => {
     .slice(0, 3);
 
   // Filtered List
-  const filteredList = grievances.filter(g => 
-    (g.citizen_name || g.village || "").toLowerCase().includes(filterText.toLowerCase()) ||
-    (g.category || g.issue_type || "").toLowerCase().includes(filterText.toLowerCase())
-  );
+  const filteredList = grievances.filter(g => {
+    const searchText = filterText.toLowerCase();
+    return (
+      (g.citizen_name || '').toLowerCase().includes(searchText) ||
+      (g.village || '').toLowerCase().includes(searchText) ||
+      (g.category || '').toLowerCase().includes(searchText) ||
+      (g.issue_type || '').toLowerCase().includes(searchText) ||
+      (g.description || '').toLowerCase().includes(searchText)
+    );
+  });
 
   // Sorted List
   const sortedList = [...filteredList].sort((a, b) => {
@@ -389,14 +499,28 @@ const HelpPeople = () => {
   const getGraphData = () => {
       const counts = {};
       grievances.forEach(g => {
-          const cat = g.category || g.issue_type || "Miscellaneous";
+          // Use category first, then issue_type, then default to Miscellaneous
+          let cat = g.category || g.issue_type || "Miscellaneous";
+          // Normalize "General" to "Miscellaneous"
+          if (cat === "General" || cat === "general" || cat === "Other") {
+            cat = "Miscellaneous";
+          }
           counts[cat] = (counts[cat] || 0) + 1;
       });
-      return Object.keys(counts).map(k => ({ name: k, count: counts[k] })).sort((a,b) => b.count - a.count).slice(0, 5);
+      return Object.keys(counts).map(k => ({ name: k, count: counts[k] })).sort((a,b) => b.count - a.count).slice(0, 6);
+  };
+
+  // Get display category for a grievance
+  const getDisplayCategory = (g) => {
+    let cat = g.category || g.issue_type || "Miscellaneous";
+    if (cat === "General" || cat === "general" || cat === "Other") {
+      cat = "Miscellaneous";
+    }
+    return cat;
   };
 
   return (
-    <div className="p-6 space-y-8 text-white">
+    <div className="p-6 space-y-8 text-white" data-testid="help-people-page">
       
       {/* Header */}
       <div className="flex items-center gap-3 border-b border-slate-800 pb-4">
@@ -424,6 +548,7 @@ const HelpPeople = () => {
                     key={issue.id} 
                     className="bg-red-950/20 border-red-900/50 border relative overflow-hidden cursor-pointer hover:border-red-700 transition-all"
                     onClick={() => setSelectedGrievance(issue)}
+                    data-testid={`critical-issue-${issue.id}`}
                   >
                       <div className="absolute top-0 right-0 p-2 opacity-20"><AlertTriangle className="h-16 w-16 text-red-500" /></div>
                       <CardHeader className="pb-2">
@@ -431,7 +556,7 @@ const HelpPeople = () => {
                             <Badge className="bg-red-600 text-white">CRITICAL</Badge>
                             <span className="text-xs text-red-300 font-mono">#{issue.id?.slice(0,6)}</span>
                           </div>
-                          <CardTitle className="text-white text-md mt-2 line-clamp-1">{issue.category || issue.issue_type}</CardTitle>
+                          <CardTitle className="text-white text-md mt-2 line-clamp-1">{getDisplayCategory(issue)}</CardTitle>
                       </CardHeader>
                       <CardContent>
                           <p className="text-slate-300 text-sm line-clamp-2">{issue.description}</p>
@@ -453,9 +578,9 @@ const HelpPeople = () => {
           <CollapsibleContent>
               <div className="p-6 border-t border-slate-800 space-y-4 bg-slate-950">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <div><Label className="text-white">Name</Label><Input className="bg-slate-900 border-slate-700 text-white" value={formData.citizen_name} onChange={e => setFormData({...formData, citizen_name: e.target.value})} /></div>
-                      <div><Label className="text-white">Contact</Label><Input className="bg-slate-900 border-slate-700 text-white" value={formData.citizen_phone} onChange={e => setFormData({...formData, citizen_phone: e.target.value})} /></div>
-                      <div><Label className="text-white">Area</Label><Input className="bg-slate-900 border-slate-700 text-white" value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})} /></div>
+                      <div><Label className="text-white">Name</Label><Input data-testid="grievance-name" className="bg-slate-900 border-slate-700 text-white" value={formData.citizen_name} onChange={e => setFormData({...formData, citizen_name: e.target.value})} /></div>
+                      <div><Label className="text-white">Contact</Label><Input data-testid="grievance-phone" className="bg-slate-900 border-slate-700 text-white" value={formData.citizen_phone} onChange={e => setFormData({...formData, citizen_phone: e.target.value})} /></div>
+                      <div><Label className="text-white">Area</Label><Input data-testid="grievance-area" className="bg-slate-900 border-slate-700 text-white" value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})} /></div>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
@@ -464,7 +589,7 @@ const HelpPeople = () => {
                               const p = getCategoryPriority(val);
                               setFormData({...formData, category: val, priority_level: p});
                           }}>
-                              <SelectTrigger className="bg-slate-900 border-slate-700 text-white"><SelectValue placeholder="Select" /></SelectTrigger>
+                              <SelectTrigger data-testid="grievance-category" className="bg-slate-900 border-slate-700 text-white"><SelectValue placeholder="Select" /></SelectTrigger>
                               <SelectContent className="bg-slate-900 border-slate-800 text-white max-h-[250px]">
                                   {CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                               </SelectContent>
@@ -479,7 +604,7 @@ const HelpPeople = () => {
                       </div>
                       <div className="relative">
                           <Label className="text-white">Description</Label>
-                          <Textarea className="bg-slate-900 border-slate-700 text-white h-24 pr-12" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} />
+                          <Textarea data-testid="grievance-description" className="bg-slate-900 border-slate-700 text-white h-24 pr-12" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} />
                           <Button
                             type="button"
                             size="sm"
@@ -491,7 +616,7 @@ const HelpPeople = () => {
                           </Button>
                       </div>
                   </div>
-                  <Button onClick={handleRegister} className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold">Register Ticket</Button>
+                  <Button data-testid="register-grievance-btn" onClick={handleRegister} className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold">Register Ticket</Button>
               </div>
           </CollapsibleContent>
       </Collapsible>
@@ -499,7 +624,7 @@ const HelpPeople = () => {
       {/* 4. Search & Filter */}
       <div className="flex gap-4 items-center bg-slate-900/50 p-4 rounded-xl border border-slate-800">
           <Search className="h-4 w-4 text-slate-500" />
-          <Input className="bg-transparent border-none text-white focus-visible:ring-0" placeholder="Search..." value={filterText} onChange={e => setFilterText(e.target.value)} />
+          <Input data-testid="search-grievances" className="bg-transparent border-none text-white focus-visible:ring-0" placeholder="Search by name, category, description..." value={filterText} onChange={e => setFilterText(e.target.value)} />
           <Select onValueChange={setSortBy} defaultValue="priority">
             <SelectTrigger className="w-[130px] bg-slate-950 border-slate-700 text-white text-xs"><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -518,11 +643,18 @@ const HelpPeople = () => {
                     key={t.id} 
                     className="p-4 bg-slate-900 border border-slate-800 rounded-lg flex justify-between items-center hover:bg-slate-800/50 cursor-pointer transition-all"
                     onClick={() => setSelectedGrievance(t)}
+                    data-testid={`grievance-item-${t.id}`}
                   >
                       <div className="flex-1">
                           <div className="flex items-center gap-3 flex-wrap">
                               <span className="text-white font-semibold">{t.citizen_name || t.village?.split('(')[0] || "Anonymous"}</span>
-                              <Badge variant="outline" className="text-slate-400 border-slate-700">{t.category || t.issue_type}</Badge>
+                              <Badge 
+                                variant="outline" 
+                                className="text-slate-300 border-slate-600"
+                                style={{ borderColor: CATEGORY_COLORS[getDisplayCategory(t)] || '#64748b' }}
+                              >
+                                {getDisplayCategory(t)}
+                              </Badge>
                               <Badge className={
                                 t.priority_level === 'CRITICAL' ? 'bg-red-600' : 
                                 t.priority_level === 'HIGH' ? 'bg-orange-600' : 
@@ -558,7 +690,7 @@ const HelpPeople = () => {
                           <BarChart data={getGraphData()} layout="vertical" margin={{left:10}}>
                               <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#1e293b" />
                               <XAxis type="number" hide />
-                              <YAxis dataKey="name" type="category" width={120} tick={{fill:'#e2e8f0', fontSize:11}} interval={0} axisLine={false} tickLine={false} />
+                              <YAxis dataKey="name" type="category" width={140} tick={{fill:'#e2e8f0', fontSize:11}} interval={0} axisLine={false} tickLine={false} />
                               <Tooltip cursor={{fill:'#1e293b', opacity:0.4}} contentStyle={{backgroundColor:'#020617', border:'1px solid #1e293b', color:'#fff'}} />
                               <Bar dataKey="count" radius={[0,4,4,0]} barSize={24}>
                                   {getGraphData().map((e,i) => <Cell key={i} fill={CATEGORY_COLORS[e.name] || '#64748b'} />)}
