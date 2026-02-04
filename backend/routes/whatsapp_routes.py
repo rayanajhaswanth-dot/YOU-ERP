@@ -769,34 +769,50 @@ async def process_message(phone: str, message: str, name: str, media_url: str = 
                     if is_audio:
                         try:
                             from emergentintegrations.llm.openai import OpenAISpeechToText
+                            import subprocess
                             
-                            # Determine file extension - WhatsApp sends .ogg (opus codec)
-                            ext = 'ogg'
+                            # Save original audio file
+                            original_ext = 'ogg'
                             if 'mp3' in media_content_type or 'mpeg' in media_content_type:
-                                ext = 'mp3'
+                                original_ext = 'mp3'
                             elif 'wav' in media_content_type:
-                                ext = 'wav'
+                                original_ext = 'wav'
                             elif 'amr' in media_content_type:
-                                ext = 'amr'
-                            elif 'opus' in media_content_type:
-                                ext = 'ogg'
+                                original_ext = 'amr'
                             
-                            # WhatsApp voice messages are typically opus codec in ogg container
-                            # Whisper supports: mp3, mp4, mpeg, mpga, m4a, wav, webm
-                            # ogg/opus needs conversion or direct handling
-                            
-                            temp_path = f"/tmp/audio_{uuid.uuid4()}.{ext}"
-                            with open(temp_path, 'wb') as f:
+                            original_path = f"/tmp/audio_{uuid.uuid4()}.{original_ext}"
+                            with open(original_path, 'wb') as f:
                                 f.write(media_obj['buffer'])
                             
                             file_size_kb = len(media_obj['buffer']) / 1024
-                            print(f"🎤 Audio saved to {temp_path}, size: {file_size_kb:.1f} KB, type: {media_content_type}")
+                            print(f"🎤 Audio saved: {original_path}, size: {file_size_kb:.1f} KB, type: {media_content_type}")
+                            
+                            # Convert OGG/OPUS to MP3 using FFmpeg (Whisper doesn't support OGG)
+                            # Supported formats: mp3, mp4, mpeg, mpga, m4a, wav, webm
+                            transcribe_path = original_path
+                            if original_ext in ['ogg', 'opus', 'amr']:
+                                mp3_path = original_path.replace(f'.{original_ext}', '.mp3')
+                                try:
+                                    result = subprocess.run([
+                                        'ffmpeg', '-i', original_path, 
+                                        '-acodec', 'libmp3lame', '-ar', '16000', '-ac', '1',
+                                        '-y', mp3_path
+                                    ], capture_output=True, text=True, timeout=30)
+                                    
+                                    if result.returncode == 0:
+                                        transcribe_path = mp3_path
+                                        print(f"🔄 Converted to MP3: {mp3_path}")
+                                    else:
+                                        print(f"⚠️ FFmpeg conversion failed: {result.stderr}")
+                                except Exception as conv_error:
+                                    print(f"⚠️ FFmpeg error: {conv_error}")
                             
                             # Initialize Emergent Speech-to-Text
                             stt = OpenAISpeechToText(api_key=EMERGENT_LLM_KEY)
                             
                             # Transcribe using emergentintegrations
-                            with open(temp_path, 'rb') as audio_file:
+                            print(f"🎙️ Starting transcription of: {transcribe_path}")
+                            with open(transcribe_path, 'rb') as audio_file:
                                 response = await stt.transcribe(
                                     file=audio_file,
                                     model="whisper-1",
@@ -807,6 +823,8 @@ async def process_message(phone: str, message: str, name: str, media_url: str = 
                             voice_transcript = response.text if hasattr(response, 'text') else str(response)
                             voice_transcript = voice_transcript.strip()
                             
+                            print(f"📝 Raw transcription result: {voice_transcript[:200] if voice_transcript else 'EMPTY'}")
+                            
                             if voice_transcript:
                                 message = voice_transcript
                                 lang = detect_language(message)
@@ -815,9 +833,11 @@ async def process_message(phone: str, message: str, name: str, media_url: str = 
                                 print("⚠️ Empty transcription result")
                                 return get_response("voice_error", lang)
                             
-                            # Cleanup temp file
+                            # Cleanup temp files
                             try:
-                                os.remove(temp_path)
+                                os.remove(original_path)
+                                if transcribe_path != original_path:
+                                    os.remove(transcribe_path)
                             except:
                                 pass
                                 
