@@ -308,8 +308,7 @@ async def resolve_grievance(
         raise HTTPException(status_code=400, detail="Photo verification required before resolving. Please upload a resolution photo first.")
     
     update_data = {
-        'status': 'RESOLVED',
-        'resolved_at': datetime.now(timezone.utc).isoformat()
+        'status': 'RESOLVED'
     }
     
     supabase.table('grievances').update(update_data).eq('id', grievance_id).execute()
