@@ -275,8 +275,6 @@ async def upload_resolution_photo(
     update_data = {
         'resolution_image_url': data.resolution_image_url
     }
-    if data.notes:
-        update_data['resolution_notes'] = data.notes
     
     supabase.table('grievances').update(update_data).eq('id', grievance_id).execute()
     
@@ -313,10 +311,9 @@ async def resolve_grievance(
         'status': 'RESOLVED',
         'resolved_at': datetime.now(timezone.utc).isoformat()
     }
-    if data and data.notes:
-        update_data['resolution_notes'] = data.notes
     
     supabase.table('grievances').update(update_data).eq('id', grievance_id).execute()
+
     
     # Send WhatsApp notification if requested
     notification_sent = False
