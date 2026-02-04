@@ -6,7 +6,7 @@ import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Textarea } from "../components/ui/textarea";
-import { Search, AlertTriangle, Plus, MapPin, BarChart3, Clock, Mic, ChevronDown, ChevronUp, CheckCircle, AlertCircle, List } from "lucide-react";
+import { Search, AlertTriangle, Plus, MapPin, BarChart3, Clock, Mic, ChevronDown, ChevronUp, CheckCircle, AlertCircle, List, Play, Camera, Star, X, Image, Phone, User } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid } from 'recharts';
 import { toast } from "sonner";
 import VoiceRecorder from '../components/VoiceRecorder';
@@ -51,6 +51,235 @@ const KpiCard = ({ title, value, icon: Icon, color }) => (
     </Card>
 );
 
+// Grievance Detail Modal with 10-Step Workflow
+const GrievanceModal = ({ grievance, onClose, onUpdate }) => {
+  const [loading, setLoading] = useState(false);
+  const [photoUrl, setPhotoUrl] = useState('');
+
+  if (!grievance) return null;
+
+  const token = localStorage.getItem('token');
+  const status = grievance.status?.toUpperCase();
+
+  const handleStartWork = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/grievances/${grievance.id}/start-work`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        toast.success("Work started on grievance");
+        onUpdate();
+      } else {
+        toast.error("Failed to start work");
+      }
+    } catch(e) {
+      toast.error("Error: " + e.message);
+    }
+    setLoading(false);
+  };
+
+  const handleUploadPhoto = async () => {
+    if (!photoUrl) {
+      toast.error("Please enter a photo URL");
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/grievances/${grievance.id}/upload-resolution-photo`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ resolution_image_url: photoUrl })
+      });
+      if (res.ok) {
+        toast.success("Photo uploaded successfully");
+        onUpdate();
+      } else {
+        toast.error("Failed to upload photo");
+      }
+    } catch(e) {
+      toast.error("Error: " + e.message);
+    }
+    setLoading(false);
+  };
+
+  const handleResolve = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/grievances/${grievance.id}/resolve`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ send_notification: true })
+      });
+      if (res.ok) {
+        toast.success("Grievance marked as resolved! Citizen will be notified.");
+        onUpdate();
+        onClose();
+      } else {
+        const err = await res.json();
+        toast.error(err.detail || "Failed to resolve");
+      }
+    } catch(e) {
+      toast.error("Error: " + e.message);
+    }
+    setLoading(false);
+  };
+
+  const statusColor = {
+    'PENDING': 'bg-yellow-600',
+    'IN_PROGRESS': 'bg-blue-600',
+    'RESOLVED': 'bg-green-600',
+    'ASSIGNED': 'bg-purple-600'
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+      <div className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        {/* Header */}
+        <div className="p-6 border-b border-slate-800 flex justify-between items-start">
+          <div>
+            <div className="flex items-center gap-3 mb-2">
+              <Badge className={statusColor[status] || 'bg-slate-600'}>{status}</Badge>
+              <Badge className={
+                grievance.priority_level === 'CRITICAL' ? 'bg-red-600' : 
+                grievance.priority_level === 'HIGH' ? 'bg-orange-600' : 
+                grievance.priority_level === 'MEDIUM' ? 'bg-yellow-600' : 'bg-blue-600'
+              }>{grievance.priority_level || 'LOW'}</Badge>
+            </div>
+            <h2 className="text-xl font-bold text-white">Ticket #{grievance.id?.slice(0,8).toUpperCase()}</h2>
+            <p className="text-slate-400 text-sm">{grievance.category || grievance.issue_type}</p>
+          </div>
+          <Button variant="ghost" size="sm" onClick={onClose}>
+            <X className="h-5 w-5 text-slate-400" />
+          </Button>
+        </div>
+
+        {/* Content */}
+        <div className="p-6 space-y-6">
+          {/* Citizen Info */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="flex items-center gap-2 text-slate-300">
+              <User className="h-4 w-4 text-slate-500" />
+              <span>{grievance.citizen_name || grievance.village || "Anonymous"}</span>
+            </div>
+            <div className="flex items-center gap-2 text-slate-300">
+              <Phone className="h-4 w-4 text-slate-500" />
+              <span>{grievance.citizen_phone || "N/A"}</span>
+            </div>
+            <div className="flex items-center gap-2 text-slate-300 col-span-2">
+              <MapPin className="h-4 w-4 text-slate-500" />
+              <span>{grievance.location || grievance.village}</span>
+            </div>
+          </div>
+
+          {/* Description */}
+          <div>
+            <Label className="text-slate-400 text-xs uppercase">Issue Description</Label>
+            <p className="text-white mt-1 bg-slate-800 p-3 rounded-lg">{grievance.description}</p>
+          </div>
+
+          {/* Media */}
+          {grievance.media_url && (
+            <div>
+              <Label className="text-slate-400 text-xs uppercase">Attached Media</Label>
+              <div className="mt-1 bg-slate-800 p-2 rounded-lg">
+                <a href={grievance.media_url} target="_blank" rel="noreferrer" className="text-blue-400 hover:underline flex items-center gap-2">
+                  <Image className="h-4 w-4" /> View Attachment
+                </a>
+              </div>
+            </div>
+          )}
+
+          {/* Resolution Photo */}
+          {grievance.resolution_image_url && (
+            <div>
+              <Label className="text-slate-400 text-xs uppercase">Resolution Photo ✓</Label>
+              <div className="mt-1 bg-green-900/30 border border-green-800 p-2 rounded-lg">
+                <a href={grievance.resolution_image_url} target="_blank" rel="noreferrer" className="text-green-400 hover:underline flex items-center gap-2">
+                  <CheckCircle className="h-4 w-4" /> View Resolution Photo
+                </a>
+              </div>
+            </div>
+          )}
+
+          {/* Feedback Rating */}
+          {grievance.feedback_rating && (
+            <div>
+              <Label className="text-slate-400 text-xs uppercase">Citizen Feedback</Label>
+              <div className="mt-1 flex items-center gap-1">
+                {[1,2,3,4,5].map(star => (
+                  <Star key={star} className={`h-5 w-5 ${star <= grievance.feedback_rating ? 'text-yellow-400 fill-yellow-400' : 'text-slate-600'}`} />
+                ))}
+                <span className="text-white ml-2">{grievance.feedback_rating}/5</span>
+              </div>
+            </div>
+          )}
+
+          {/* 10-STEP WORKFLOW ACTIONS */}
+          <div className="border-t border-slate-800 pt-6">
+            <Label className="text-slate-400 text-xs uppercase mb-4 block">Workflow Actions</Label>
+            
+            {/* Step 8a: Start Work */}
+            {status === 'PENDING' && (
+              <Button 
+                onClick={handleStartWork} 
+                disabled={loading}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white mb-3"
+              >
+                <Play className="h-4 w-4 mr-2" /> Start Work
+              </Button>
+            )}
+
+            {/* Step 8b: Upload Photo (required before resolve) */}
+            {(status === 'IN_PROGRESS' || status === 'ASSIGNED') && !grievance.resolution_image_url && (
+              <div className="space-y-2 mb-3">
+                <div className="flex gap-2">
+                  <Input 
+                    placeholder="Enter resolution photo URL..." 
+                    value={photoUrl}
+                    onChange={(e) => setPhotoUrl(e.target.value)}
+                    className="bg-slate-800 border-slate-700 text-white flex-1"
+                  />
+                  <Button 
+                    onClick={handleUploadPhoto}
+                    disabled={loading || !photoUrl}
+                    className="bg-purple-600 hover:bg-purple-700"
+                  >
+                    <Camera className="h-4 w-4 mr-2" /> Upload
+                  </Button>
+                </div>
+                <p className="text-xs text-slate-500">Photo verification required before marking as resolved</p>
+              </div>
+            )}
+
+            {/* Step 8c: Mark Resolved */}
+            {(status === 'IN_PROGRESS' || status === 'ASSIGNED') && grievance.resolution_image_url && (
+              <Button 
+                onClick={handleResolve}
+                disabled={loading}
+                className="w-full bg-green-600 hover:bg-green-700 text-white"
+              >
+                <CheckCircle className="h-4 w-4 mr-2" /> Mark Resolved & Notify Citizen
+              </Button>
+            )}
+
+            {status === 'RESOLVED' && (
+              <div className="bg-green-900/30 border border-green-800 rounded-lg p-4 text-center">
+                <CheckCircle className="h-8 w-8 text-green-400 mx-auto mb-2" />
+                <p className="text-green-400 font-semibold">Grievance Resolved</p>
+                {grievance.feedback_rating && (
+                  <p className="text-slate-400 text-sm mt-1">Citizen rated: {grievance.feedback_rating}/5 stars</p>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const HelpPeople = () => {
   const [grievances, setGrievances] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -58,6 +287,7 @@ const HelpPeople = () => {
   const [sortBy, setSortBy] = useState("priority");
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [showVoiceRecorder, setShowVoiceRecorder] = useState(false);
+  const [selectedGrievance, setSelectedGrievance] = useState(null);
 
   const [formData, setFormData] = useState({
     citizen_name: "",
@@ -65,7 +295,7 @@ const HelpPeople = () => {
     location: "",
     category: "Miscellaneous",
     description: "",
-    priority_level: "MEDIUM"  // Matches backend/DB column
+    priority_level: "MEDIUM"
   });
 
   useEffect(() => {
@@ -173,7 +403,7 @@ const HelpPeople = () => {
           <AlertTriangle className="h-8 w-8 text-orange-500" />
           <div>
             <h1 className="text-3xl font-bold">Help People Console</h1>
-            <p className="text-slate-400 text-sm">Citizen Grievance Redressal</p>
+            <p className="text-slate-400 text-sm">Citizen Grievance Redressal • 10-Step Workflow</p>
           </div>
       </div>
 
@@ -190,7 +420,11 @@ const HelpPeople = () => {
           <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest border-b border-slate-800 pb-2 mb-3">Priority 1: Unresolved Critical</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {topCritical.length > 0 ? topCritical.map(issue => (
-                  <Card key={issue.id} className="bg-red-950/20 border-red-900/50 border relative overflow-hidden">
+                  <Card 
+                    key={issue.id} 
+                    className="bg-red-950/20 border-red-900/50 border relative overflow-hidden cursor-pointer hover:border-red-700 transition-all"
+                    onClick={() => setSelectedGrievance(issue)}
+                  >
                       <div className="absolute top-0 right-0 p-2 opacity-20"><AlertTriangle className="h-16 w-16 text-red-500" /></div>
                       <CardHeader className="pb-2">
                           <div className="flex justify-between">
@@ -280,24 +514,37 @@ const HelpPeople = () => {
           {/* List */}
           <div className="flex-1 space-y-3 max-h-[600px] overflow-y-auto pr-2">
               {sortedList.map(t => (
-                  <div key={t.id} className="p-4 bg-slate-900 border border-slate-800 rounded-lg flex justify-between items-center hover:bg-slate-800/50">
-                      <div>
-                          <div className="flex items-center gap-3">
-                              <span className="text-white font-semibold">{t.citizen_name || t.village || "Anonymous"}</span>
+                  <div 
+                    key={t.id} 
+                    className="p-4 bg-slate-900 border border-slate-800 rounded-lg flex justify-between items-center hover:bg-slate-800/50 cursor-pointer transition-all"
+                    onClick={() => setSelectedGrievance(t)}
+                  >
+                      <div className="flex-1">
+                          <div className="flex items-center gap-3 flex-wrap">
+                              <span className="text-white font-semibold">{t.citizen_name || t.village?.split('(')[0] || "Anonymous"}</span>
                               <Badge variant="outline" className="text-slate-400 border-slate-700">{t.category || t.issue_type}</Badge>
                               <Badge className={
                                 t.priority_level === 'CRITICAL' ? 'bg-red-600' : 
                                 t.priority_level === 'HIGH' ? 'bg-orange-600' : 
                                 t.priority_level === 'MEDIUM' ? 'bg-yellow-600' : 'bg-blue-600'
                               }>{t.priority_level || 'LOW'}</Badge>
+                              {t.feedback_rating && (
+                                <Badge className="bg-yellow-600 flex items-center gap-1">
+                                  <Star className="h-3 w-3" /> {t.feedback_rating}/5
+                                </Badge>
+                              )}
                           </div>
                           <p className="text-sm text-slate-400 mt-1 line-clamp-1">{t.description}</p>
                           <div className="flex gap-4 mt-2 text-xs text-slate-500">
-                            <span className="flex items-center gap-1"><MapPin className="h-3 w-3" /> {t.location || t.village}</span>
-                            <span className={`uppercase font-bold ${t.status === 'resolved' || t.status === 'RESOLVED' ? 'text-green-500' : 'text-yellow-500'}`}>{t.status}</span>
+                            <span className="flex items-center gap-1"><MapPin className="h-3 w-3" /> {t.location || t.village?.split('(')[0]}</span>
+                            <span className={`uppercase font-bold ${
+                              t.status === 'RESOLVED' || t.status === 'resolved' ? 'text-green-500' : 
+                              t.status === 'IN_PROGRESS' ? 'text-blue-500' : 'text-yellow-500'
+                            }`}>{t.status}</span>
+                            {t.resolution_image_url && <span className="text-green-400 flex items-center gap-1"><Camera className="h-3 w-3" /> Verified</span>}
                           </div>
                       </div>
-                      <Button variant="secondary" size="sm" className="bg-slate-800">Manage</Button>
+                      <Button variant="secondary" size="sm" className="bg-slate-800 ml-4">Manage</Button>
                   </div>
               ))}
           </div>
@@ -333,6 +580,22 @@ const HelpPeople = () => {
             setShowVoiceRecorder(false);
           }}
           onClose={() => setShowVoiceRecorder(false)}
+        />
+      )}
+
+      {/* Grievance Detail Modal */}
+      {selectedGrievance && (
+        <GrievanceModal 
+          grievance={selectedGrievance}
+          onClose={() => setSelectedGrievance(null)}
+          onUpdate={() => {
+            fetchGrievances();
+            // Refresh the selected grievance
+            const token = localStorage.getItem('token');
+            fetch(`${BACKEND_URL}/api/grievances/${selectedGrievance.id}`, {
+              headers: { 'Authorization': `Bearer ${token}` }
+            }).then(r => r.json()).then(data => setSelectedGrievance(data)).catch(() => {});
+          }}
         />
       )}
     </div>
