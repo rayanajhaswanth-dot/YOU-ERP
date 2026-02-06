@@ -897,8 +897,17 @@ const HelpPeople = () => {
                 const { date, time } = formatDateTime(t.created_at);
                 const displayCat = normalizeCategory(t.category || t.issue_type);
                 return (
-                  <div key={t.id} className="p-4 bg-slate-900 border border-slate-800 rounded-lg cursor-pointer hover:bg-slate-800/50 transition-all" onClick={() => setSelectedGrievance(t)}>
-                      <div className="flex items-start justify-between">
+                  <div key={t.id} className="relative p-4 bg-slate-900 border border-slate-800 rounded-lg cursor-pointer hover:bg-slate-800/50 transition-all" onClick={() => setSelectedGrievance(t)}>
+                      {/* Delete Button */}
+                      <button
+                        onClick={(e) => handleDeleteGrievance(t.id, e)}
+                        className="absolute top-2 right-2 p-1 text-slate-500 hover:text-red-500 hover:bg-red-500/10 rounded transition-colors z-10"
+                        title="Delete Grievance"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                      
+                      <div className="flex items-start justify-between pr-6">
                         <div className="flex-1">
                           <div className="flex items-center gap-2 flex-wrap mb-1">
                               <span className="text-white font-semibold">{t.citizen_name || "Anonymous"}</span>
