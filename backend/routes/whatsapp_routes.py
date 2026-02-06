@@ -237,6 +237,14 @@ async def process_osd_conversation(phone: str, message: str, name: str, media_ur
             return ai_reply or await get_osd_response("chat_default", user_lang)
         
         # ---------------------------------------------------------------------
+        # GENERAL_QUERY: Government schemes, processes, eligibility questions
+        # ---------------------------------------------------------------------
+        if intent == 'GENERAL_QUERY':
+            # The AI has generated a wise, informative response about schemes/governance
+            # DO NOT register as grievance - just provide information
+            return ai_reply or await get_osd_response("query_default", user_lang)
+        
+        # ---------------------------------------------------------------------
         # FEEDBACK: Rating (1-5), Praise, Complaint about service
         # ---------------------------------------------------------------------
         if intent == 'FEEDBACK':
