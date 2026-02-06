@@ -1,7 +1,13 @@
 """
 YOU - Governance ERP WhatsApp Bot
-CTO MANDATE: Dynamic Language Interceptor, Intelligent Media Processing, Conversational Flow
+OSD PERSONA UPDATE: Conversational Intelligence + Native Language Resolution
 Updated: 2026-02-06
+
+The bot now acts like a professional Officer on Special Duty (OSD):
+- Distinguishes between CHAT, GRIEVANCE, STATUS, FEEDBACK
+- Responds in user's native language
+- Does NOT register "Thank you" or greetings as grievances
+- Sends resolution notifications in user's original language
 """
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
@@ -12,7 +18,6 @@ from twilio.twiml.messaging_response import MessagingResponse
 import os
 import uuid
 import json
-import base64
 import httpx
 import random
 import string
@@ -20,22 +25,16 @@ import asyncio
 from datetime import datetime, timezone, timedelta
 from fastapi.responses import Response
 
-# Import from centralized AI routes
+# Import the OSD Brain
 from routes.ai_routes import (
-    detect_language,
+    analyze_incoming_message,
     translate_text,
     extract_grievance_from_media,
-    extract_grievance_from_text,
     transcribe_audio,
+    detect_language,
+    map_to_official_category,
     categorize_text,
-    is_status_request,
-    is_yes_response,
-    is_no_response,
-    is_greeting,
-    is_help_request,
-    get_localized_keyword,
-    OFFICIAL_CATEGORIES,
-    map_to_official_category
+    OFFICIAL_CATEGORIES
 )
 
 router = APIRouter()
@@ -47,407 +46,16 @@ TWILIO_WHATSAPP_NUMBER = os.environ.get('TWILIO_WHATSAPP_NUMBER')
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')
 SUPABASE_URL = os.environ.get('SUPABASE_URL')
 SUPABASE_SERVICE_KEY = os.environ.get('SUPABASE_SERVICE_KEY')
-STORAGE_BUCKET = os.environ.get('STORAGE_BUCKET', 'Grievances')
 
 twilio_client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
 
-# ==============================================================================
-# CONVERSATION STATE MANAGEMENT
-# ==============================================================================
-conversation_states: Dict[str, Dict[str, Any]] = {}
-
-def get_conversation_state(phone: str) -> Dict[str, Any]:
-    """Get or create conversation state for a phone number"""
-    if phone not in conversation_states:
-        conversation_states[phone] = {
-            "stage": "greeting",
-            "language": "en",  # Will be updated dynamically
-            "collected_data": {
-                "name": None,
-                "phone": phone,
-                "area": None,
-                "category": None,
-                "description": None,
-                "media_url": None
-            },
-            "last_activity": datetime.now(timezone.utc).isoformat()
-        }
-    return conversation_states[phone]
-
-def update_conversation_state(phone: str, updates: Dict[str, Any]):
-    """Update conversation state"""
-    state = get_conversation_state(phone)
-    state.update(updates)
-    state["last_activity"] = datetime.now(timezone.utc).isoformat()
-    conversation_states[phone] = state
-
-def clear_conversation_state(phone: str):
-    """Clear conversation state after successful registration"""
-    if phone in conversation_states:
-        del conversation_states[phone]
 
 # ==============================================================================
-# MULTILINGUAL RESPONSE TEMPLATES
-# ==============================================================================
-
-RESPONSES = {
-    "greeting": {
-        "en": """🙏 Namaste {name}!
-
-Welcome to the MLA's Grievance Helpline.
-
-To register your grievance, please provide:
-1. Your Full Name
-2. Contact Number  
-3. Area (Village/Mandal/Ward/Town)
-4. Issue Category
-5. Problem Description
-
-You can also:
-• 🎤 Send a voice message
-• 📸 Send a photo of the issue
-• 📄 Send a PDF document
-
-Type your grievance or say '{help_word}' for assistance.""",
-
-        "te": """🙏 నమస్కారం {name}!
-
-MLA ఫిర్యాదుల హెల్ప్‌లైన్‌కు స్వాగతం.
-
-మీ ఫిర్యాదును నమోదు చేయడానికి, దయచేసి అందించండి:
-1. మీ పూర్తి పేరు
-2. ఫోన్ నంబర్
-3. ప్రాంతం (గ్రామం/మండలం/వార్డు/పట్టణం)
-4. సమస్య విభాగం
-5. సమస్య వివరణ
-
-మీరు కూడా చేయవచ్చు:
-• 🎤 వాయిస్ మెసేజ్ పంపండి
-• 📸 సమస్య ఫోటో పంపండి
-• 📄 PDF పత్రం పంపండి
-
-మీ సమస్యను టైప్ చేయండి లేదా '{help_word}' అని టైప్ చేయండి.""",
-
-        "hi": """🙏 नमस्ते {name}!
-
-MLA शिकायत हेल्पलाइन में आपका स्वागत है।
-
-अपनी शिकायत दर्ज करने के लिए, कृपया दें:
-1. आपका पूरा नाम
-2. संपर्क नंबर
-3. क्षेत्र (गांव/मंडल/वार्ड/शहर)
-4. समस्या श्रेणी
-5. समस्या विवरण
-
-आप यह भी कर सकते हैं:
-• 🎤 वॉयस मैसेज भेजें
-• 📸 समस्या की फोटो भेजें
-• 📄 PDF दस्तावेज़ भेजें
-
-अपनी समस्या टाइप करें या '{help_word}' टाइप करें।""",
-
-        "ta": """🙏 வணக்கம் {name}!
-
-MLA புகார் உதவி எண்ணுக்கு வரவேற்கிறோம்.
-
-உங்கள் புகாரைப் பதிவு செய்ய, தயவுசெய்து வழங்கவும்:
-1. உங்கள் முழு பெயர்
-2. தொடர்பு எண்
-3. பகுதி (கிராமம்/மண்டலம்/வார்டு/நகரம்)
-4. பிரச்சனை வகை
-5. பிரச்சனை விவரம்
-
-'{help_word}' என்று தட்டச்சு செய்யவும்."""
-    },
-    
-    "ask_name": {
-        "en": "📝 Please provide your **full name** for the grievance record:",
-        "te": "📝 దయచేసి ఫిర్యాదు రికార్డు కోసం మీ **పూర్తి పేరు** అందించండి:",
-        "hi": "📝 कृपया शिकायत रिकॉर्ड के लिए अपना **पूरा नाम** दें:",
-        "ta": "📝 புகார் பதிவுக்கு உங்கள் **முழு பெயரை** வழங்கவும்:"
-    },
-    
-    "ask_area": {
-        "en": "📍 Please provide your **area/location**:\n(Village name, Mandal, Ward, Town, or Division)",
-        "te": "📍 దయచేసి మీ **ప్రాంతం/స్థానం** అందించండి:\n(గ్రామం పేరు, మండలం, వార్డు, లేదా పట్టణం)",
-        "hi": "📍 कृपया अपना **क्षेत्र/स्थान** दें:\n(गांव का नाम, मंडल, वार्ड, या शहर)",
-        "ta": "📍 உங்கள் **பகுதி/இடத்தை** வழங்கவும்:\n(கிராமம், மண்டலம், வார்டு, நகரம்)"
-    },
-    
-    "ask_category": {
-        "en": """📁 Please select the **issue category**:
-
-1. Water & Irrigation
-2. Agriculture  
-3. Health & Sanitation
-4. Education
-5. Infrastructure & Roads
-6. Law & Order
-7. Welfare Schemes
-8. Electricity
-9. Other
-
-Reply with the number or category name.""",
-
-        "te": """📁 దయచేసి **సమస్య విభాగం** ఎంచుకోండి:
-
-1. నీరు & సాగునీరు
-2. వ్యవసాయం
-3. ఆరోగ్యం & పారిశుద్ధ్యం
-4. విద్య
-5. మౌలిక సదుపాయాలు & రోడ్లు
-6. శాంతిభద్రత
-7. సంక్షేమ పథకాలు
-8. విద్యుత్
-9. ఇతరాలు
-
-సంఖ్య లేదా విభాగం పేరుతో ప్రత్యుత్తరం ఇవ్వండి.""",
-
-        "hi": """📁 कृपया **समस्या श्रेणी** चुनें:
-
-1. जल और सिंचाई
-2. कृषि
-3. स्वास्थ्य और स्वच्छता
-4. शिक्षा
-5. बुनियादी ढांचा और सड़कें
-6. कानून व्यवस्था
-7. कल्याण योजनाएं
-8. बिजली
-9. अन्य
-
-नंबर या श्रेणी नाम से जवाब दें।""",
-
-        "ta": """📁 **பிரச்சனை வகையை** தேர்ந்தெடுக்கவும்:
-
-1. நீர் & நீர்ப்பாசனம்
-2. விவசாயம்
-3. சுகாதாரம்
-4. கல்வி
-5. உள்கட்டமைப்பு
-6. சட்டம் & ஒழுங்கு
-7. நலத்திட்டங்கள்
-8. மின்சாரம்
-9. மற்றவை
-
-எண் அல்லது வகை பெயரை பதிலளிக்கவும்."""
-    },
-    
-    "ask_description": {
-        "en": "📝 Please describe your **problem/issue** in detail:\n(What happened? Where? When? Any other relevant details)",
-        "te": "📝 దయచేసి మీ **సమస్యను** వివరంగా వివరించండి:\n(ఏమి జరిగింది? ఎక్కడ? ఎప్పుడు? ఇతర వివరాలు)",
-        "hi": "📝 कृपया अपनी **समस्या** का विस्तार से वर्णन करें:\n(क्या हुआ? कहां? कब? अन्य प्रासंगिक विवरण)",
-        "ta": "📝 உங்கள் **பிரச்சனையை** விரிவாக விவரிக்கவும்:\n(என்ன நடந்தது? எங்கே? எப்போது?)"
-    },
-    
-    "confirm_grievance": {
-        "en": """📋 **Please confirm your grievance details:**
-
-👤 Name: {name}
-📱 Contact: {phone}
-📍 Area: {area}
-📁 Category: {category}
-📝 Issue: {description}
-
-Reply **{yes_word}** to confirm and register, or **{no_word}** to make changes.""",
-
-        "te": """📋 **దయచేసి మీ ఫిర్యాదు వివరాలను నిర్ధారించండి:**
-
-👤 పేరు: {name}
-📱 ఫోన్: {phone}
-📍 ప్రాంతం: {area}
-📁 విభాగం: {category}
-📝 సమస్య: {description}
-
-నిర్ధారించడానికి **{yes_word}** అని, మార్పులు చేయడానికి **{no_word}** అని ప్రత్యుత్తరం ఇవ్వండి.""",
-
-        "hi": """📋 **कृपया अपनी शिकायत विवरण की पुष्टि करें:**
-
-👤 नाम: {name}
-📱 संपर्क: {phone}
-📍 क्षेत्र: {area}
-📁 श्रेणी: {category}
-📝 समस्या: {description}
-
-पुष्टि के लिए **{yes_word}**, बदलाव के लिए **{no_word}** टाइप करें।""",
-
-        "ta": """📋 **உங்கள் புகார் விவரங்களை உறுதிப்படுத்தவும்:**
-
-👤 பெயர்: {name}
-📱 தொடர்பு: {phone}
-📍 பகுதி: {area}
-📁 வகை: {category}
-📝 பிரச்சனை: {description}
-
-உறுதிப்படுத்த **{yes_word}**, மாற்ற **{no_word}** தட்டச்சு செய்யவும்."""
-    },
-    
-    "ticket_registered": {
-        "en": """✅ **Ticket #{ticket_id} Registered Successfully!**
-
-📅 Date: {date}
-⏰ Time: {time}
-
-📁 Category: {category}
-⚡ Priority: {priority}
-
-Thank you for contacting the Leader's Office.
-You'll receive updates on WhatsApp as we process your grievance.
-
-Type '{status_word}' anytime to check progress.""",
-
-        "te": """✅ **టికెట్ #{ticket_id} విజయవంతంగా నమోదు చేయబడింది!**
-
-📅 తేదీ: {date}
-⏰ సమయం: {time}
-
-📁 విభాగం: {category}
-⚡ ప్రాధాన్యత: {priority}
-
-నాయకుడి కార్యాలయాన్ని సంప్రదించినందుకు ధన్యవాదాలు.
-మీ ఫిర్యాదును ప్రాసెస్ చేస్తున్నప్పుడు WhatsAppలో అప్‌డేట్‌లు అందుతాయి.
-
-పురోగతిని చూడటానికి '{status_word}' అని టైప్ చేయండి.""",
-
-        "hi": """✅ **टिकट #{ticket_id} सफलतापूर्वक पंजीकृत!**
-
-📅 दिनांक: {date}
-⏰ समय: {time}
-
-📁 श्रेणी: {category}
-⚡ प्राथमिकता: {priority}
-
-नेता के कार्यालय से संपर्क करने के लिए धन्यवाद।
-आपकी शिकायत पर कार्रवाई होने पर WhatsApp पर अपडेट मिलेंगे।
-
-प्रगति देखने के लिए '{status_word}' टाइप करें।""",
-
-        "ta": """✅ **டிக்கெட் #{ticket_id} வெற்றிகரமாக பதிவு செய்யப்பட்டது!**
-
-📅 தேதி: {date}
-⏰ நேரம்: {time}
-
-📁 வகை: {category}
-⚡ முன்னுரிமை: {priority}
-
-தலைவர் அலுவலகத்தை தொடர்புகொண்டதற்கு நன்றி.
-நிலையை பார்க்க '{status_word}' தட்டச்சு செய்யவும்."""
-    },
-    
-    "voice_received": {
-        "en": "🎤 I received your voice message and transcribed it. Processing your grievance...",
-        "te": "🎤 మీ వాయిస్ మెసేజ్ అందింది, ట్రాన్‌స్క్రైబ్ చేయబడింది. మీ ఫిర్యాదును ప్రాసెస్ చేస్తున్నాను...",
-        "hi": "🎤 मुझे आपका वॉयस मैसेज मिला और ट्रांसक्राइब हो गया। आपकी शिकायत प्रोसेस हो रही है...",
-        "ta": "🎤 உங்கள் குரல் செய்தி பெறப்பட்டது. உங்கள் புகார் செயலாக்கப்படுகிறது..."
-    },
-    
-    "voice_error": {
-        "en": "🎤 I received your voice message but couldn't transcribe it. Please try again or type your message.",
-        "te": "🎤 మీ వాయిస్ మెసేజ్ అందింది కానీ ట్రాన్‌స్క్రైబ్ చేయలేకపోయాను. దయచేసి మళ్ళీ ప్రయత్నించండి లేదా టైప్ చేయండి.",
-        "hi": "🎤 मुझे आपका वॉयस मैसेज मिला लेकिन ट्रांसक्राइब नहीं कर सका। कृपया फिर से प्रयास करें या टाइप करें.",
-        "ta": "🎤 குரல் செய்தி பெறப்பட்டது ஆனால் படியெடுக்க முடியவில்லை. மீண்டும் முயற்சிக்கவும்."
-    },
-    
-    "media_received": {
-        "en": "📎 I received your {media_type} and extracted the information. Processing your grievance...",
-        "te": "📎 మీ {media_type} అందింది, సమాచారం సేకరించబడింది. మీ ఫిర్యాదును ప్రాసెస్ చేస్తున్నాను...",
-        "hi": "📎 आपका {media_type} मिला और जानकारी निकाली गई। आपकी शिकायत प्रोसेस हो रही है...",
-        "ta": "📎 உங்கள் {media_type} பெறப்பட்டது. உங்கள் புகார் செயலாக்கப்படுகிறது..."
-    },
-    
-    "media_error": {
-        "en": "📎 I received your file but couldn't extract information. Please describe your issue in text.",
-        "te": "📎 మీ ఫైల్ అందింది కానీ సమాచారం సేకరించలేకపోయాను. దయచేసి మీ సమస్యను టెక్స్ట్‌లో వివరించండి.",
-        "hi": "📎 आपकी फाइल मिली लेकिन जानकारी नहीं निकाल सका। कृपया अपनी समस्या टेक्स्ट में बताएं.",
-        "ta": "📎 உங்கள் கோப்பு பெறப்பட்டது ஆனால் தகவல் பெற முடியவில்லை. உங்கள் பிரச்சனையை உரையில் விவரிக்கவும்."
-    },
-    
-    "status_response": {
-        "en": "📊 **Your Recent Grievances:**\n\n",
-        "te": "📊 **మీ ఇటీవలి ఫిర్యాదులు:**\n\n",
-        "hi": "📊 **आपकी हालिया शिकायतें:**\n\n",
-        "ta": "📊 **உங்கள் சமீபத்திய புகார்கள்:**\n\n"
-    },
-    
-    "no_grievances": {
-        "en": "No grievances found for your phone number.",
-        "te": "మీ ఫోన్ నంబర్‌తో ఫిర్యాదులు కనుగొనబడలేదు.",
-        "hi": "आपके फोन नंबर से कोई शिकायत नहीं मिली।",
-        "ta": "உங்கள் தொலைபேசி எண்ணில் புகார்கள் இல்லை."
-    },
-    
-    "clarification_needed": {
-        "en": "I couldn't fully understand your request. Could you please provide more details about your issue?",
-        "te": "మీ అభ్యర్థనను పూర్తిగా అర్థం చేసుకోలేకపోయాను. దయచేసి మీ సమస్య గురించి మరిన్ని వివరాలు అందించగలరా?",
-        "hi": "मैं आपके अनुरोध को पूरी तरह समझ नहीं पाया। कृपया अपनी समस्या के बारे में और विवरण दें।",
-        "ta": "உங்கள் கோரிக்கையை முழுமையாக புரிந்துகொள்ள முடியவில்லை. உங்கள் பிரச்சனை பற்றி மேலும் விவரங்கள் தரவும்."
-    }
-}
-
-# Category translations for display (user-facing only, DB always English)
-CATEGORY_DISPLAY = {
-    "te": {
-        "Water & Irrigation": "నీరు & సాగునీరు",
-        "Agriculture": "వ్యవసాయం",
-        "Health & Sanitation": "ఆరోగ్యం & పారిశుద్ధ్యం",
-        "Education": "విద్య",
-        "Infrastructure & Roads": "మౌలిక సదుపాయాలు & రోడ్లు",
-        "Law & Order": "శాంతిభద్రత",
-        "Welfare Schemes": "సంక్షేమ పథకాలు",
-        "Electricity": "విద్యుత్",
-        "Miscellaneous": "ఇతరాలు"
-    },
-    "hi": {
-        "Water & Irrigation": "जल और सिंचाई",
-        "Agriculture": "कृषि",
-        "Health & Sanitation": "स्वास्थ्य और स्वच्छता",
-        "Education": "शिक्षा",
-        "Infrastructure & Roads": "बुनियादी ढांचा और सड़कें",
-        "Law & Order": "कानून व्यवस्था",
-        "Welfare Schemes": "कल्याण योजनाएं",
-        "Electricity": "बिजली",
-        "Miscellaneous": "विविध"
-    },
-    "ta": {
-        "Water & Irrigation": "நீர் & நீர்ப்பாசனம்",
-        "Agriculture": "விவசாயம்",
-        "Health & Sanitation": "சுகாதாரம்",
-        "Education": "கல்வி",
-        "Infrastructure & Roads": "உள்கட்டமைப்பு",
-        "Law & Order": "சட்டம் & ஒழுங்கு",
-        "Welfare Schemes": "நலத்திட்டங்கள்",
-        "Electricity": "மின்சாரம்",
-        "Miscellaneous": "மற்றவை"
-    }
-}
-
-
-def get_response(key: str, lang: str, **kwargs) -> str:
-    """Get localized response with dynamic keyword substitution"""
-    templates = RESPONSES.get(key, {})
-    template = templates.get(lang, templates.get("en", ""))
-    
-    # Add localized keywords
-    kwargs.setdefault('help_word', get_localized_keyword('help', lang) if lang != 'en' else 'help')
-    kwargs.setdefault('status_word', get_localized_keyword('status', lang))
-    kwargs.setdefault('yes_word', get_localized_keyword('yes', lang))
-    kwargs.setdefault('no_word', get_localized_keyword('no', lang))
-    
-    return template.format(**kwargs) if kwargs else template
-
-
-def get_category_display(category_en: str, lang: str) -> str:
-    """Get category name in user's language for display"""
-    if lang == 'en':
-        return category_en
-    return CATEGORY_DISPLAY.get(lang, {}).get(category_en, category_en)
-
-
-# ==============================================================================
-# MEDIA PROCESSING HELPERS
+# MEDIA DOWNLOAD HELPER
 # ==============================================================================
 
 async def download_twilio_media(url: str, client: httpx.AsyncClient) -> dict:
-    """Download media from Twilio with authentication"""
+    """Download media from Twilio"""
     if not url:
         return None
     
@@ -468,35 +76,40 @@ async def download_twilio_media(url: str, client: httpx.AsyncClient) -> dict:
     return None
 
 
-async def upload_to_supabase_storage(file_obj: dict, folder: str, client: httpx.AsyncClient) -> str:
-    """Upload media to Supabase Storage and return public URL"""
+async def upload_to_storage(file_obj: dict, folder: str, client: httpx.AsyncClient) -> str:
+    """Upload to Supabase storage"""
     random_suffix = ''.join(random.choices(string.ascii_lowercase + string.digits, k=7))
     extension = file_obj['content_type'].split('/')[-1].split(';')[0]
     if extension == 'mpeg': extension = 'mp3'
     
     file_name = f"{folder}/{int(datetime.now().timestamp())}_{random_suffix}.{extension}"
-    upload_url = f"{SUPABASE_URL}/storage/v1/object/{STORAGE_BUCKET}/{file_name}"
+    upload_url = f"{SUPABASE_URL}/storage/v1/object/Grievances/{file_name}"
     
-    upload_response = await client.post(
+    await client.post(
         upload_url,
         headers={'Authorization': f'Bearer {SUPABASE_SERVICE_KEY}', 'Content-Type': file_obj['content_type']},
         content=file_obj['buffer'],
         timeout=60.0
     )
     
-    if upload_response.status_code not in [200, 201]:
-        raise Exception(f"Upload failed: {upload_response.text}")
-    
-    return f"{SUPABASE_URL}/storage/v1/object/public/{STORAGE_BUCKET}/{file_name}"
+    return f"{SUPABASE_URL}/storage/v1/object/public/Grievances/{file_name}"
 
 
 # ==============================================================================
-# MAIN WEBHOOK HANDLER
+# MAIN WEBHOOK - THE OSD PERSONA
 # ==============================================================================
 
 @router.post("/webhook")
 async def whatsapp_webhook(request: Request):
-    """Main WhatsApp webhook - Intelligent Multi-turn Conversation"""
+    """
+    Main WhatsApp webhook with OSD Persona Intelligence.
+    
+    Flow:
+    1. Receive message
+    2. Detect language
+    3. Classify intent (CHAT/GRIEVANCE/STATUS/FEEDBACK)
+    4. Respond appropriately - DO NOT register chats as grievances
+    """
     try:
         form_data = await request.form()
         
@@ -510,7 +123,7 @@ async def whatsapp_webhook(request: Request):
         
         print(f"📱 WhatsApp from {from_number} ({profile_name}): {message_body[:100]}...")
         
-        response_message = await process_conversation(
+        response_message = await process_osd_conversation(
             phone=from_number,
             message=message_body,
             name=profile_name,
@@ -529,43 +142,27 @@ async def whatsapp_webhook(request: Request):
         traceback.print_exc()
         
         resp = MessagingResponse()
-        resp.message("Sorry, I encountered an error. Please try again.")
+        resp.message("I apologize for the inconvenience. Please try again in a moment.")
         
         return Response(content=str(resp), media_type="application/xml")
 
 
-async def process_conversation(phone: str, message: str, name: str, media_url: str = None, media_content_type: str = None) -> str:
+async def process_osd_conversation(phone: str, message: str, name: str, media_url: str = None, media_content_type: str = None) -> str:
     """
-    Intelligent Multi-turn Conversation Flow
+    The OSD Brain - Intelligent Conversation Handler
     
-    Key Features:
-    1. Dynamic Language Detection on EVERY message
-    2. All responses in user's detected language
-    3. Media (PDF/Image) extraction with AI
-    4. Database storage ALWAYS in English
+    Key Logic:
+    1. If CHAT (greetings, thanks, ok): Reply politely, DO NOT register
+    2. If FEEDBACK (rating, praise): Thank them, log internally, DO NOT register new grievance
+    3. If STATUS: Fetch and respond in native language
+    4. If GRIEVANCE: Extract, register, confirm in native language
     """
     supabase = get_supabase()
     
-    # Get conversation state
-    state = get_conversation_state(phone)
-    
-    # =========================================================================
-    # STEP 1: LANGUAGE INTERCEPTION (Every message)
-    # =========================================================================
-    detected_lang = detect_language(message) if message else state["language"]
-    
-    # Update language if changed mid-conversation
-    if detected_lang != state["language"]:
-        print(f"🌐 Language switch detected: {state['language']} → {detected_lang}")
-        state["language"] = detected_lang
-        update_conversation_state(phone, {"language": detected_lang})
-    
-    lang = state["language"]
-    
-    # =========================================================================
-    # STEP 2: HANDLE MEDIA (PDF/Image/Audio)
-    # =========================================================================
-    media_extracted_data = None
+    # ===========================================================================
+    # STEP 1: HANDLE MEDIA (PDF/Image/Audio)
+    # ===========================================================================
+    media_extracted = None
     
     if media_url and media_content_type:
         async with httpx.AsyncClient(timeout=120.0) as client:
@@ -579,213 +176,109 @@ async def process_conversation(phone: str, message: str, name: str, media_url: s
                 # Upload to storage
                 try:
                     folder = 'audio' if is_audio else ('documents' if is_pdf else 'images')
-                    stored_url = await upload_to_supabase_storage(media_obj, folder, client)
-                    state["collected_data"]["media_url"] = stored_url
+                    stored_url = await upload_to_storage(media_obj, folder, client)
                 except Exception as e:
                     print(f"⚠️ Storage upload failed: {e}")
+                    stored_url = None
                 
-                # Process based on media type
                 if is_audio:
-                    # Transcribe audio
+                    # Transcribe voice message
                     transcript = await transcribe_audio(media_obj['buffer'], media_content_type)
                     if transcript:
                         message = transcript
-                        detected_lang = detect_language(message)
-                        state["language"] = detected_lang
-                        lang = detected_lang
-                        print(f"🎤 Transcribed ({lang}): {transcript[:100]}...")
+                        print(f"🎤 Transcribed: {transcript[:100]}...")
                     else:
-                        return get_response("voice_error", lang)
+                        return await get_osd_response("voice_error", detect_language(message) or 'en')
                 
                 elif is_image or is_pdf:
-                    # Extract grievance info from media using AI
-                    media_extracted_data = await extract_grievance_from_media(
-                        media_obj['buffer'], 
-                        media_content_type
-                    )
+                    # Extract grievance from document
+                    media_extracted = await extract_grievance_from_media(media_obj['buffer'], media_content_type)
                     
-                    if media_extracted_data and media_extracted_data.get("description"):
-                        # Update state with extracted data
-                        if media_extracted_data.get("name"):
-                            state["collected_data"]["name"] = media_extracted_data["name"]
-                        if media_extracted_data.get("contact"):
-                            state["collected_data"]["phone"] = media_extracted_data["contact"]
-                        if media_extracted_data.get("area"):
-                            state["collected_data"]["area"] = media_extracted_data["area"]
-                        if media_extracted_data.get("category"):
-                            state["collected_data"]["category"] = media_extracted_data["category"]
-                        if media_extracted_data.get("description"):
-                            state["collected_data"]["description"] = media_extracted_data["description"]
-                        
-                        # Set language from extraction
-                        if media_extracted_data.get("language"):
-                            lang = media_extracted_data["language"]
-                            state["language"] = lang
-                        
-                        update_conversation_state(phone, {"collected_data": state["collected_data"], "language": lang})
-                        
-                        media_type_display = "PDF document" if is_pdf else "photo"
-                        print(f"📎 Extracted from {media_type_display}: {media_extracted_data}")
+                    if media_extracted:
+                        media_extracted['media_url'] = stored_url
+                        print(f"📎 Extracted from media: {media_extracted}")
                     else:
-                        return get_response("media_error", lang)
+                        return await get_osd_response("media_error", detect_language(message) or 'en')
     
-    # =========================================================================
-    # STEP 3: CHECK FOR SPECIAL COMMANDS (Multilingual)
-    # =========================================================================
+    # ===========================================================================
+    # STEP 2: OSD BRAIN - INTENT CLASSIFICATION
+    # ===========================================================================
     
-    # STATUS request
-    if is_status_request(message, lang):
-        return await get_grievance_status(phone, lang, supabase)
+    # If we have media-extracted data, it's definitely a grievance
+    if media_extracted and media_extracted.get('description'):
+        return await register_grievance_osd(
+            phone=phone,
+            name=media_extracted.get('name') or name,
+            area=media_extracted.get('area'),
+            category=map_to_official_category(media_extracted.get('category', 'Miscellaneous')),
+            description=media_extracted.get('description'),
+            language=media_extracted.get('language', 'en'),
+            media_url=media_extracted.get('media_url'),
+            supabase=supabase
+        )
     
-    # HELP request
-    if is_help_request(message, lang):
-        return get_response("greeting", lang, name=name)
-    
-    # YES confirmation
-    if state["stage"] == "confirming" and is_yes_response(message, lang):
-        return await register_grievance(phone, state, lang, supabase)
-    
-    # NO - restart
-    if state["stage"] == "confirming" and is_no_response(message, lang):
-        update_conversation_state(phone, {"stage": "collecting_info"})
-        return get_response("greeting", lang, name=name)
-    
-    # Category selection by number
-    if state["stage"] == "collecting_category" and message.strip() in ['1','2','3','4','5','6','7','8','9']:
-        category_map = {
-            '1': "Water & Irrigation",
-            '2': "Agriculture",
-            '3': "Health & Sanitation",
-            '4': "Education",
-            '5': "Infrastructure & Roads",
-            '6': "Law & Order",
-            '7': "Welfare Schemes",
-            '8': "Electricity",
-            '9': "Miscellaneous"
-        }
-        state["collected_data"]["category"] = category_map.get(message.strip(), "Miscellaneous")
-        update_conversation_state(phone, {"collected_data": state["collected_data"]})
+    # For text messages - use the OSD Brain
+    if message:
+        ai_decision = await analyze_incoming_message(message, name, phone)
         
-        if state["collected_data"]["description"]:
-            return await confirm_grievance(phone, state, lang)
-        else:
-            update_conversation_state(phone, {"stage": "collecting_description"})
-            return get_response("ask_description", lang)
-    
-    # =========================================================================
-    # STEP 4: GREETING - Start new conversation
-    # =========================================================================
-    if is_greeting(message, lang) or state["stage"] == "greeting":
-        update_conversation_state(phone, {
-            "stage": "collecting_info",
-            "collected_data": {
-                "name": name,
-                "phone": phone,
-                "area": None,
-                "category": None,
-                "description": None,
-                "media_url": state["collected_data"].get("media_url")
-            }
-        })
-        return get_response("greeting", lang, name=name)
-    
-    # =========================================================================
-    # STEP 5: PROCESS GRIEVANCE TEXT
-    # =========================================================================
-    if state["stage"] in ["collecting_info", "collecting_name", "collecting_area", "collecting_category", "collecting_description"]:
+        intent = ai_decision.get('intent', 'CHAT')
+        user_lang = ai_decision.get('detected_language', 'en')
+        ai_reply = ai_decision.get('reply')
+        grievance_data = ai_decision.get('grievance_data')
         
-        # If we have media-extracted data, use it directly
-        if media_extracted_data and media_extracted_data.get("description"):
-            data = state["collected_data"]
-            # Check what's still missing
-            if not data.get("name") or data["name"] == "Citizen":
-                data["name"] = name
+        print(f"🧠 OSD Brain Decision: intent={intent}, lang={user_lang}")
+        
+        # ---------------------------------------------------------------------
+        # CHAT: Greetings, Thank you, OK, General conversation
+        # ---------------------------------------------------------------------
+        if intent == 'CHAT':
+            # The AI has generated a polite response - just return it
+            # DO NOT register anything
+            return ai_reply or await get_osd_response("chat_default", user_lang)
+        
+        # ---------------------------------------------------------------------
+        # FEEDBACK: Rating (1-5), Praise, Complaint about service
+        # ---------------------------------------------------------------------
+        if intent == 'FEEDBACK':
+            # Try to update the latest grievance with rating if it's a number
+            rating = extract_rating(message)
+            if rating:
+                await update_latest_grievance_rating(phone, rating, supabase)
             
-            # If we have all required info from media, go to confirmation
-            if data.get("area") and data.get("description"):
-                update_conversation_state(phone, {"collected_data": data})
-                return await confirm_grievance(phone, state, lang)
+            # Return thank you response - DO NOT register new grievance
+            return ai_reply or await get_osd_response("feedback_thanks", user_lang)
         
-        # Use AI to extract from unstructured text
-        if message:
-            extracted = await extract_grievance_from_text(message, name, phone)
-            
-            # Update collected data with extracted info
-            if extracted.get("name") and extracted["name"] != "Citizen":
-                state["collected_data"]["name"] = extracted["name"]
-            if extracted.get("area"):
-                state["collected_data"]["area"] = extracted["area"]
-            if extracted.get("category") and extracted["category"] != "Miscellaneous":
-                state["collected_data"]["category"] = extracted["category"]
-            if extracted.get("description"):
-                state["collected_data"]["description"] = extracted["description"]
-            
-            update_conversation_state(phone, {"collected_data": state["collected_data"]})
+        # ---------------------------------------------------------------------
+        # STATUS: User asking for complaint status
+        # ---------------------------------------------------------------------
+        if intent == 'STATUS':
+            return await get_grievance_status_osd(phone, user_lang, supabase)
         
-        # Check what's missing and ask
-        data = state["collected_data"]
-        
-        if not data.get("name") or data["name"] == "Citizen":
-            update_conversation_state(phone, {"stage": "collecting_name"})
-            return get_response("ask_name", lang)
-        
-        if not data.get("area"):
-            update_conversation_state(phone, {"stage": "collecting_area"})
-            return get_response("ask_area", lang)
-        
-        if not data.get("category") or data["category"] == "Miscellaneous":
-            # Try to auto-detect from description
-            if data.get("description"):
-                cat, _, _ = categorize_text(data["description"])
-                if cat != "Miscellaneous":
-                    data["category"] = cat
-                    update_conversation_state(phone, {"collected_data": data})
-                else:
-                    update_conversation_state(phone, {"stage": "collecting_category"})
-                    return get_response("ask_category", lang)
-            else:
-                update_conversation_state(phone, {"stage": "collecting_category"})
-                return get_response("ask_category", lang)
-        
-        if not data.get("description"):
-            update_conversation_state(phone, {"stage": "collecting_description"})
-            return get_response("ask_description", lang)
-        
-        # All data collected - confirm
-        return await confirm_grievance(phone, state, lang)
+        # ---------------------------------------------------------------------
+        # GRIEVANCE: Actual complaint to register
+        # ---------------------------------------------------------------------
+        if intent == 'GRIEVANCE' and grievance_data:
+            return await register_grievance_osd(
+                phone=phone,
+                name=grievance_data.get('name') or name,
+                area=grievance_data.get('area'),
+                category=map_to_official_category(grievance_data.get('category', 'Miscellaneous')),
+                description=grievance_data.get('description') or message,
+                language=user_lang,
+                media_url=None,
+                supabase=supabase
+            )
     
-    # Default fallback - ask for clarification in user's language
-    return get_response("clarification_needed", lang)
+    # Fallback - ask for clarification
+    return await get_osd_response("clarification", 'en')
 
 
-async def confirm_grievance(phone: str, state: Dict, lang: str) -> str:
-    """Show confirmation in user's language with localized YES/NO"""
-    data = state["collected_data"]
-    
-    update_conversation_state(phone, {"stage": "confirming"})
-    
-    # Get category display in user's language
-    category_display = get_category_display(data.get("category", "Miscellaneous"), lang)
-    
-    # Truncate description for display
-    desc = data.get("description", "")
-    desc_display = desc[:200] + "..." if len(desc) > 200 else desc
-    
-    return get_response("confirm_grievance", lang,
-        name=data.get("name", ""),
-        phone=data.get("phone", phone),
-        area=data.get("area", ""),
-        category=category_display,
-        description=desc_display
-    )
+# ==============================================================================
+# GRIEVANCE REGISTRATION
+# ==============================================================================
 
-
-async def register_grievance(phone: str, state: Dict, lang: str, supabase) -> str:
-    """
-    Register grievance in database.
-    CRITICAL: All data stored in ENGLISH regardless of input language.
-    """
-    data = state["collected_data"]
+async def register_grievance_osd(phone: str, name: str, area: str, category: str, description: str, language: str, media_url: str, supabase) -> str:
+    """Register grievance and respond in user's native language"""
     
     # Get politician ID
     politicians = supabase.table('politicians').select('id').limit(1).execute()
@@ -794,59 +287,28 @@ async def register_grievance(phone: str, state: Dict, lang: str, supabase) -> st
     
     politician_id = politicians.data[0]['id']
     
-    # Category is ALWAYS in English (enforced by AI extraction)
-    category_en = data.get("category", "Miscellaneous")
-    if category_en not in OFFICIAL_CATEGORIES:
-        category_en = map_to_official_category(category_en)
-    
     # Determine priority
-    _, priority_level, deadline_hours = categorize_text(data.get("description", ""))
+    _, priority_level, deadline_hours = categorize_text(description)
     
-    # Override with category-based priority
-    if category_en in ["Health & Sanitation", "Law & Order", "Electricity"]:
-        priority_level = "CRITICAL"
-        deadline_hours = 4
-    elif category_en in ["Water & Irrigation", "Infrastructure & Roads", "Agriculture"]:
-        priority_level = "HIGH"
-        deadline_hours = 24
-    
-    # Calculate deadline
     now = datetime.now(timezone.utc)
     deadline = (now + timedelta(hours=deadline_hours)).isoformat()
     
-    # Create grievance record - ALL FIELDS IN ENGLISH
+    # Grievance record - ALL IN ENGLISH for DB
     grievance_data = {
         'id': str(uuid.uuid4()),
         'politician_id': politician_id,
-        
-        # Citizen info
-        'citizen_name': data.get("name", "Anonymous"),
-        'citizen_phone': data.get("phone", phone),
-        
-        # Location
-        'village': data.get("area", "Not specified"),
-        
-        # Category - ALWAYS ENGLISH
-        'category': category_en,
-        'issue_type': category_en,
-        
-        # Description - Should be English (AI translates during extraction)
-        'description': data.get("description", ""),
-        
-        # AI Reality Matrix
+        'citizen_name': name or "Citizen",
+        'citizen_phone': phone,
+        'village': area or "Not specified",
+        'category': category,  # ENGLISH
+        'issue_type': category,  # ENGLISH
+        'description': description,  # ENGLISH (AI translates during extraction)
         'priority_level': priority_level,
         'deadline_timestamp': deadline,
-        'ai_priority': 8 if priority_level == 'CRITICAL' else 6 if priority_level == 'HIGH' else 4,
-        
-        # Media
-        'media_url': data.get("media_url"),
-        
-        # Status
         'status': 'PENDING',
-        
-        # Language for future communications
-        'language_preference': lang,
-        
+        'raw_input_language': language,  # Store user's language for future notifications
+        'media_url': media_url,
+        'language_preference': language,
         'created_at': now.isoformat()
     }
     
@@ -854,58 +316,60 @@ async def register_grievance(phone: str, state: Dict, lang: str, supabase) -> st
         result = supabase.table('grievances').insert(grievance_data).execute()
         
         if result.data:
-            ticket = result.data[0]
-            ticket_id = str(ticket['id'])[:8].upper()
+            ticket_id = str(result.data[0]['id'])[:8].upper()
             
-            # Format date/time
-            date_str = now.strftime("%d-%m-%Y")
-            time_str = now.strftime("%I:%M %p")
+            # Confirmation message in user's native language
+            base_msg = f"I have noted your grievance and registered it with Ticket #{ticket_id}. I am forwarding this to the concerned department immediately. You will receive updates on WhatsApp."
             
-            # Get category display in user's language
-            category_display = get_category_display(category_en, lang)
+            if language != 'en':
+                response = await translate_text(base_msg, language)
+            else:
+                response = base_msg
             
-            # Clear conversation state
-            clear_conversation_state(phone)
+            return f"✅ {response}"
             
-            return get_response("ticket_registered", lang,
-                ticket_id=ticket_id,
-                date=date_str,
-                time=time_str,
-                category=category_display,
-                priority=priority_level
-            )
-        
     except Exception as e:
-        print(f"❌ DB Error: {e}")
+        print(f"❌ Registration error: {e}")
         import traceback
         traceback.print_exc()
     
-    return "Error registering grievance. Please try again."
+    return "I apologize, there was an error registering your grievance. Please try again."
 
 
-async def get_grievance_status(phone: str, lang: str, supabase) -> str:
-    """Get grievance status in user's language"""
+# ==============================================================================
+# STATUS CHECK
+# ==============================================================================
+
+async def get_grievance_status_osd(phone: str, language: str, supabase) -> str:
+    """Get grievance status in user's native language"""
     try:
         result = supabase.table('grievances').select('*').eq('citizen_phone', phone).order('created_at', desc=True).limit(5).execute()
         
         if not result.data:
-            return get_response("no_grievances", lang)
-        
-        status_text = get_response("status_response", lang)
+            no_grievance_msg = "I could not find any grievances registered with your phone number."
+            if language != 'en':
+                return await translate_text(no_grievance_msg, language)
+            return no_grievance_msg
         
         status_emojis = {'PENDING': '⏳', 'IN_PROGRESS': '🔄', 'RESOLVED': '✅', 'ASSIGNED': '👤'}
         
+        header = "Here are your recent grievances:"
+        if language != 'en':
+            header = await translate_text(header, language)
+        
+        status_text = f"📊 {header}\n\n"
+        
         for idx, g in enumerate(result.data, 1):
-            status = g.get('status', 'PENDING').upper()
+            status = (g.get('status') or 'PENDING').upper()
             emoji = status_emojis.get(status, '📝')
             created = g.get('created_at', '')[:10]
-            category = get_category_display(g.get('category', 'Miscellaneous'), lang)
-            desc = g.get('description', '')[:50]
+            category = g.get('category', 'Miscellaneous')
+            ticket_id = str(g.get('id', ''))[:8].upper()
             
-            status_text += f"{idx}. {emoji} **{status}**\n"
+            status_text += f"{idx}. {emoji} #{ticket_id}\n"
             status_text += f"   📁 {category}\n"
             status_text += f"   📅 {created}\n"
-            status_text += f"   📝 {desc}...\n\n"
+            status_text += f"   Status: {status}\n\n"
         
         return status_text
         
@@ -915,7 +379,116 @@ async def get_grievance_status(phone: str, lang: str, supabase) -> str:
 
 
 # ==============================================================================
-# ADDITIONAL ENDPOINTS
+# HELPER FUNCTIONS
+# ==============================================================================
+
+def extract_rating(text: str) -> int:
+    """Extract rating (1-5) from text"""
+    import re
+    # Look for numbers 1-5
+    match = re.search(r'\b([1-5])\b', text)
+    if match:
+        return int(match.group(1))
+    
+    # Check for words
+    rating_words = {
+        'excellent': 5, 'great': 5, 'amazing': 5, 'perfect': 5,
+        'good': 4, 'satisfied': 4, 'happy': 4,
+        'okay': 3, 'ok': 3, 'average': 3,
+        'bad': 2, 'poor': 2, 'unsatisfied': 2,
+        'terrible': 1, 'worst': 1, 'horrible': 1
+    }
+    
+    text_lower = text.lower()
+    for word, rating in rating_words.items():
+        if word in text_lower:
+            return rating
+    
+    return None
+
+
+async def update_latest_grievance_rating(phone: str, rating: int, supabase):
+    """Update the most recent resolved grievance with feedback rating"""
+    try:
+        result = supabase.table('grievances').select('id').eq('citizen_phone', phone).eq('status', 'RESOLVED').order('created_at', desc=True).limit(1).execute()
+        
+        if result.data:
+            grievance_id = result.data[0]['id']
+            supabase.table('grievances').update({'feedback_rating': rating}).eq('id', grievance_id).execute()
+            print(f"✅ Updated rating to {rating} for grievance {grievance_id}")
+    except Exception as e:
+        print(f"⚠️ Could not update rating: {e}")
+
+
+async def get_osd_response(response_type: str, language: str) -> str:
+    """Get OSD-style response in user's language"""
+    responses = {
+        "chat_default": "I'm here to assist you. How may I help you today?",
+        "feedback_thanks": "Thank you for your valuable feedback. We are committed to serving you better.",
+        "voice_error": "I received your voice message but could not process it. Please try again or type your message.",
+        "media_error": "I received your document but could not extract the information. Please describe your issue in text.",
+        "clarification": "I'm here to help. Could you please provide more details about your concern?",
+    }
+    
+    base_msg = responses.get(response_type, responses["chat_default"])
+    
+    if language != 'en':
+        return await translate_text(base_msg, language)
+    
+    return base_msg
+
+
+# ==============================================================================
+# RESOLUTION NOTIFICATION (Called from grievance_routes when status = RESOLVED)
+# ==============================================================================
+
+async def send_resolution_notification(grievance_id: str, supabase) -> bool:
+    """
+    Send resolution notification to citizen in their NATIVE language.
+    Called when OSD marks grievance as resolved.
+    """
+    try:
+        result = supabase.table('grievances').select('*').eq('id', grievance_id).execute()
+        
+        if not result.data:
+            return False
+        
+        grievance = result.data[0]
+        citizen_phone = grievance.get('citizen_phone')
+        user_lang = grievance.get('raw_input_language') or grievance.get('language_preference') or 'en'
+        category = grievance.get('category', 'your issue')
+        ticket_id = str(grievance_id)[:8].upper()
+        
+        if not citizen_phone:
+            return False
+        
+        # Base English message
+        base_msg = f"Dear Citizen, your grievance #{ticket_id} regarding '{category}' has been resolved. We hope you are satisfied with the action taken. Please reply with a rating (1-5) or your feedback."
+        
+        # Translate to user's native language
+        if user_lang != 'en':
+            final_msg = await translate_text(base_msg, user_lang)
+        else:
+            final_msg = base_msg
+        
+        final_msg = f"✅ {final_msg}"
+        
+        # Send via Twilio
+        to_number = f'whatsapp:{citizen_phone}' if not citizen_phone.startswith('whatsapp:') else citizen_phone
+        twilio_client.messages.create(from_=TWILIO_WHATSAPP_NUMBER, body=final_msg, to=to_number)
+        
+        print(f"📤 Resolution notification sent to {citizen_phone} in {user_lang}")
+        return True
+        
+    except Exception as e:
+        print(f"❌ Resolution notification error: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+# ==============================================================================
+# API ENDPOINTS
 # ==============================================================================
 
 class WhatsAppMessage(BaseModel):
@@ -933,39 +506,14 @@ async def send_whatsapp_message(data: WhatsAppMessage):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/send-resolution")
-async def send_resolution_notification(grievance_id: str):
-    """Send resolution notification to citizen"""
-    try:
-        supabase = get_supabase()
-        result = supabase.table('grievances').select('*').eq('id', grievance_id).execute()
-        
-        if not result.data:
-            raise HTTPException(status_code=404, detail="Grievance not found")
-        
-        grievance = result.data[0]
-        citizen_phone = grievance.get('citizen_phone')
-        lang = grievance.get('language_preference', 'en')
-        
-        if not citizen_phone:
-            raise HTTPException(status_code=400, detail="No phone number for citizen")
-        
-        # Send notification in citizen's preferred language
-        messages = {
-            'en': f"✅ Great news! Your grievance #{grievance_id[:8].upper()} has been RESOLVED. Thank you for your patience. Please rate our service by replying with a number 1-5 (5 being excellent).",
-            'te': f"✅ శుభవార్త! మీ ఫిర్యాదు #{grievance_id[:8].upper()} పరిష్కరించబడింది. మీ ఓపికకు ధన్యవాదాలు. దయచేసి 1-5 సంఖ్యతో మా సేవను రేట్ చేయండి.",
-            'hi': f"✅ खुशखबरी! आपकी शिकायत #{grievance_id[:8].upper()} का समाधान हो गया है। आपके धैर्य के लिए धन्यवाद। कृपया 1-5 अंक देकर हमारी सेवा का मूल्यांकन करें।"
-        }
-        
-        message_text = messages.get(lang, messages['en'])
-        
-        to_number = f'whatsapp:{citizen_phone}' if not citizen_phone.startswith('whatsapp:') else citizen_phone
-        twilio_client.messages.create(from_=TWILIO_WHATSAPP_NUMBER, body=message_text, to=to_number)
-        
-        return {"success": True, "message": "Resolution notification sent"}
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+@router.post("/send-resolution/{grievance_id}")
+async def send_resolution_endpoint(grievance_id: str):
+    """Send resolution notification to citizen in native language"""
+    supabase = get_supabase()
+    success = await send_resolution_notification(grievance_id, supabase)
+    if success:
+        return {"success": True, "message": "Resolution notification sent in citizen's native language"}
+    raise HTTPException(status_code=500, detail="Failed to send notification")
 
 
 @router.get("/status")
@@ -973,17 +521,18 @@ async def whatsapp_status():
     """Check WhatsApp bot status"""
     return {
         "status": "active",
-        "version": "2.0 - CTO Mandate Implementation",
+        "version": "3.0 - OSD Persona Intelligence",
         "features": [
-            "Dynamic Language Interception (detects language on EVERY message)",
-            "Multilingual Responses (Telugu, Hindi, Tamil, Kannada, Malayalam, Bengali)",
-            "Localized Keywords (status/yes/no in user's language)",
-            "AI-Powered PDF Extraction (GPT-4o)",
-            "AI-Powered Image OCR (GPT-4o)",
-            "Voice Transcription with FFmpeg (Whisper)",
-            "Standardized English Categories (11 Official)",
-            "Multi-turn Contextual Conversation",
-            "Follow-up Questions for Missing Information"
+            "Intent Classification (CHAT/GRIEVANCE/STATUS/FEEDBACK)",
+            "OSD Persona - Professional PA/OSD style responses",
+            "Native Language Resolution - Notifications in user's language",
+            "Smart Chat - 'Thank you' is not registered as grievance",
+            "Feedback Loop - Ratings stored, thank you response given",
+            "PDF/Image AI Extraction with GPT-4o",
+            "Voice Transcription with Whisper",
+            "English-only DB storage with language context",
+            "Multilingual Support (Telugu, Hindi, Tamil, Kannada, Malayalam, Bengali)"
         ],
+        "intents": ["CHAT", "GRIEVANCE", "STATUS", "FEEDBACK"],
         "categories": OFFICIAL_CATEGORIES
     }
