@@ -45,7 +45,10 @@ async def create_grievance(
     grievance_data = {
         'id': grievance_id,
         'politician_id': current_user.politician_id,
+        'citizen_name': data.citizen_name or "Anonymous",
+        'citizen_phone': data.citizen_phone,
         'village': location_value,
+        'category': category_value,
         'description': data.description,
         'issue_type': category_value,
         'ai_priority': data.ai_priority,
