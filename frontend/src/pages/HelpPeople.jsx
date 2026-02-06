@@ -516,6 +516,33 @@ const HelpPeople = () => {
     finally { setLoading(false); }
   };
 
+  // Delete grievance handler
+  const handleDeleteGrievance = async (grievanceId, e) => {
+    e.stopPropagation(); // Prevent card click
+    
+    if (!window.confirm("Are you sure you want to delete this grievance? This action cannot be undone.")) {
+      return;
+    }
+    
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${BACKEND_URL}/api/grievances/${grievanceId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (res.ok) {
+        toast.success("Grievance deleted successfully");
+        fetchGrievances(); // Refresh list
+      } else {
+        const err = await res.json();
+        toast.error(err.detail || "Failed to delete grievance");
+      }
+    } catch (e) {
+      toast.error("Error deleting grievance: " + e.message);
+    }
+  };
+
   const handleMediaSelect = async (e) => {
     const file = e.target.files[0];
     if (file) {
