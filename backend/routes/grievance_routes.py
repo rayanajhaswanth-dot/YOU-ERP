@@ -296,7 +296,7 @@ async def resolve_grievance(
 ):
     """
     Step 8-9: Mark grievance as resolved (requires photo verification first)
-    Optionally sends WhatsApp notification to citizen requesting feedback
+    Sends WhatsApp notification to citizen in their NATIVE LANGUAGE
     """
     supabase = get_supabase()
     
@@ -311,33 +311,26 @@ async def resolve_grievance(
         raise HTTPException(status_code=400, detail="Photo verification required before resolving. Please upload a resolution photo first.")
     
     update_data = {
-        'status': 'RESOLVED'
+        'status': 'RESOLVED',
+        'resolved_at': datetime.now(timezone.utc).isoformat()
     }
     
     supabase.table('grievances').update(update_data).eq('id', grievance_id).execute()
-
     
-    # Send WhatsApp notification if requested
+    # Send WhatsApp notification in citizen's NATIVE language
     notification_sent = False
-    if data and data.send_notification:
-        citizen_phone = grievance.get('citizen_phone')
-        if citizen_phone:
-            try:
-                import httpx
-                backend_url = "http://localhost:8001"
-                async with httpx.AsyncClient() as client:
-                    await client.post(
-                        f"{backend_url}/api/whatsapp/send-resolution",
-                        params={"grievance_id": grievance_id},
-                        timeout=10.0
-                    )
-                notification_sent = True
-            except Exception as e:
-                print(f"⚠️ Failed to send resolution notification: {e}")
+    if data is None or data.send_notification:
+        try:
+            from routes.whatsapp_routes import send_resolution_notification
+            notification_sent = await send_resolution_notification(grievance_id, supabase)
+        except Exception as e:
+            print(f"⚠️ Failed to send resolution notification: {e}")
     
     return {
         "message": "Grievance resolved successfully",
         "status": "RESOLVED",
+        "notification_sent": notification_sent
+    }
         "notification_sent": notification_sent
     }
 
