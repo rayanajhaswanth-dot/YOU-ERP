@@ -5,7 +5,34 @@ A production-ready SaaS platform for Indian political leaders featuring AI-power
 
 ## Changelog
 
-### 2026-02-06 (CTO MANDATE Implementation - P0 Complete)
+### 2026-02-06 (OSD PERSONA UPDATE - P0 Complete)
+
+**Critical Fixes - The "OSD Brain" Implementation:**
+
+#### A. Intent Classification (The OSD Brain)
+- ✅ NEW: `analyze_incoming_message()` - Classifies intent: CHAT, GRIEVANCE, STATUS, FEEDBACK
+- ✅ "Thank you" and greetings are now correctly identified as CHAT - NOT registered as grievances
+- ✅ Ratings (1-5, "good job") are identified as FEEDBACK - Stored but NOT registered as new grievances
+- ✅ Professional OSD-style responses in user's native language
+
+#### B. Native Language Resolution (Closed Loop)
+- ✅ `raw_input_language` stored with each grievance
+- ✅ Resolution notifications sent in citizen's ORIGINAL language
+- ✅ `send_resolution_notification()` translates to user's native language before sending
+
+#### C. Conversational Flow
+- ✅ Bot distinguishes between query, grievance, feedback
+- ✅ Professional PA/OSD persona responses
+- ✅ Complete chat cycle: Beginning → Conversation → End
+
+**Files Updated:**
+- `backend/routes/ai_routes.py` - OSD Brain with intent classification
+- `backend/routes/whatsapp_routes.py` - Conversational flow with OSD persona
+- `backend/routes/grievance_routes.py` - Native language notifications on resolve
+
+**WhatsApp Bot Version:** 3.0 - OSD Persona Intelligence
+
+### 2026-02-06 (CTO MANDATE Implementation - Earlier)
 
 **Critical Fixes Implemented:**
 
