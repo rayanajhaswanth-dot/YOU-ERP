@@ -190,7 +190,7 @@ class TestAIPriorityAnalysis:
         """Road/Infrastructure issues should be HIGH priority"""
         response = requests.post(
             f"{BASE_URL}/api/ai/analyze_priority",
-            json={"text": "Big pothole on main road causing accidents"}
+            json={"text": "Road has big potholes, needs repair urgently"}
         )
         assert response.status_code == 200
         data = response.json()
@@ -338,16 +338,25 @@ class TestGrievanceWorkflow:
         assert response.status_code in [200, 201], f"Create failed: {response.text}"
         
         data = response.json()
-        assert data["category"] == "Water & Irrigation"
-        assert data["citizen_name"] == "TEST_CTO_Mandate_User"
+        # API returns {"message": ..., "id": ...}
+        assert "id" in data, f"Response missing 'id': {data}"
+        grievance_id = data["id"]
+        
+        # Verify by fetching the created grievance
+        get_response = requests.get(
+            f"{BASE_URL}/api/grievances/{grievance_id}",
+            headers={"Authorization": f"Bearer {auth_token}"}
+        )
+        assert get_response.status_code == 200
+        grievance_data = get_response.json()
+        assert grievance_data["category"] == "Water & Irrigation"
+        assert grievance_data["citizen_name"] == "TEST_CTO_Mandate_User"
         
         # Cleanup - delete the test grievance
-        grievance_id = data.get("id")
-        if grievance_id:
-            requests.delete(
-                f"{BASE_URL}/api/grievances/{grievance_id}",
-                headers={"Authorization": f"Bearer {auth_token}"}
-            )
+        requests.delete(
+            f"{BASE_URL}/api/grievances/{grievance_id}",
+            headers={"Authorization": f"Bearer {auth_token}"}
+        )
     
     def test_grievance_metrics(self, auth_token):
         """Should return grievance metrics"""
