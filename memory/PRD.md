@@ -5,6 +5,27 @@ A production-ready SaaS platform for Indian political leaders featuring AI-power
 
 ## Changelog
 
+### 2026-02-06 (WhatsApp Bot Enhancement - P0 Complete)
+**New Functional Requirements Implemented:**
+
+1. **Timestamp Logging** ✅ - All grievances display date/time in Help People Console
+2. **AI-Driven Standardized Format** ✅ - Enhanced extraction prompt with IMPORTANT RULES for category mapping
+3. **Dynamic Language Handling** ✅ - Detects and persists language (Telugu, Hindi, Tamil, Kannada, Malayalam, Bengali)
+4. **Media Upload & AI Processing** ✅ - NEW: PDF document extraction using GPT-4o
+5. **Unified Analytics** ✅ - All categories normalized to English in graphs
+6. **Enhanced Filtering** ✅ - NEW: Geo-hierarchy filter (Mandal, Village, Panchayat, Town, Ward, Division, City)
+7. **Incomplete Grievance Handling** ✅ - Multi-turn conversation with contextual follow-ups
+8. **PDF Processing** ✅ - NEW: `extract_from_pdf()` function extracts name, phone, area, issue from PDF documents
+
+**Files Updated:**
+- `backend/routes/whatsapp_routes.py` - Added PDF extraction, enhanced AI prompt
+- `frontend/src/pages/HelpPeople.jsx` - Added geo-hierarchy filter dropdown
+
+**Test Results:**
+- Backend: 100% (16/16 tests passed)
+- Frontend: 100% (all features working)
+- Test Report: `/app/test_reports/iteration_6.json`
+
 ### 2026-02-04 (CRITICAL FIXES)
 **Issue 1 FIXED - File Upload from Device:**
 - Added `POST /api/grievances/{id}/upload-file` endpoint for direct file upload
@@ -106,8 +127,16 @@ A production-ready SaaS platform for Indian political leaders featuring AI-power
 - 10-step workflow: ✅ Complete with photo verification
 
 ## Pending Tasks
-- [ ] Test WhatsApp voice transcription live (Telugu, >30 seconds)
-- [ ] Refine Broadcast Center (view past broadcast history)
-- [ ] Expand Multi-Role Access Control
-- [ ] Real-time WebSocket ticker
-- [ ] Remove obsolete files (tickets_routes.py, HappinessReport.jsx)
+- [ ] **P1: Test WhatsApp voice transcription live** (Telugu, >30 seconds) - User verification needed
+- [ ] **P1: Refine Broadcast Center** - View past broadcast history from database
+- [ ] **P2: Expand Multi-Role Access Control** - Cover more UI components and API endpoints
+- [ ] **P3: Real-time WebSocket ticker** - Connect SystemTicker component
+- [ ] **P3: Remove obsolete files** (tickets_routes.py)
+
+## Completed Tasks
+- [x] **P0: WhatsApp Bot Enhancement** - All 8 functional requirements implemented
+- [x] PDF document extraction for grievance registration
+- [x] Geo-hierarchy filtering in Help People Console
+- [x] Enhanced AI extraction with better category mapping
+- [x] 10-step grievance workflow with photo verification
+- [x] Multi-lingual support (Telugu, Hindi, Tamil, Kannada, Malayalam, Bengali)
