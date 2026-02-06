@@ -5,7 +5,42 @@ A production-ready SaaS platform for Indian political leaders featuring AI-power
 
 ## Changelog
 
-### 2026-02-06 (WhatsApp Bot Enhancement - P0 Complete)
+### 2026-02-06 (CTO MANDATE Implementation - P0 Complete)
+
+**Critical Fixes Implemented:**
+
+#### A. Intelligent Media Extraction (PDF/Image)
+- ✅ NEW: `extract_grievance_from_media()` in `ai_routes.py` - Uses GPT-4o for PDF/Image OCR
+- ✅ Extracts 6 fields: Name, Contact, Area, Category, Description, Language
+- ✅ Frontend auto-fills form when PDF/image uploaded in Register Grievance
+- ✅ All categories normalized to English before DB storage
+
+#### B. Dynamic Language Interceptor
+- ✅ NEW: `detect_language()` - Unicode script-based detection (no LLM = frugal)
+- ✅ Detects: Telugu (te), Hindi (hi), Tamil (ta), Kannada (kn), Malayalam (ml), Bengali (bn)
+- ✅ Every WhatsApp message triggers language detection
+- ✅ Bot responds in user's detected language
+- ✅ Localized keywords: status/yes/no shown in user's language
+
+#### C. Strict Data Normalization
+- ✅ 11 Official English Categories enforced
+- ✅ `map_to_official_category()` normalizes any input to official category
+- ✅ NEW: `/api/analytics/grievance-stats` returns normalized data
+- ✅ Frontend `normalizeCategory()` mirrors backend logic
+
+**Files Updated:**
+- `backend/routes/ai_routes.py` - Complete rewrite with language detection, translation, media extraction
+- `backend/routes/whatsapp_routes.py` - Dynamic language interception, multilingual responses
+- `backend/routes/analytics_routes.py` - Added normalize_category() and /grievance-stats endpoint
+- `backend/routes/grievance_routes.py` - Fixed citizen_name/citizen_phone saving
+- `frontend/src/pages/HelpPeople.jsx` - AI extraction on media upload, enhanced category normalization
+
+**Test Results:**
+- Backend: 100% (24/24 tests passed)
+- Frontend: 100% (all features working)
+- Test Report: `/app/test_reports/iteration_7.json`
+
+### 2026-02-06 (WhatsApp Bot Enhancement - Earlier)
 **New Functional Requirements Implemented:**
 
 1. **Timestamp Logging** ✅ - All grievances display date/time in Help People Console
