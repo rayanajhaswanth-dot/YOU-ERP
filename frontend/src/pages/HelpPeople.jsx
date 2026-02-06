@@ -6,7 +6,7 @@ import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Textarea } from "../components/ui/textarea";
-import { Search, AlertTriangle, Plus, MapPin, BarChart3, Clock, Mic, ChevronDown, ChevronUp, CheckCircle, AlertCircle, List, Play, Camera, Star, X, Image, Phone, User, Upload } from "lucide-react";
+import { Search, AlertTriangle, Plus, MapPin, BarChart3, Clock, Mic, ChevronDown, ChevronUp, CheckCircle, AlertCircle, List, Play, Camera, Star, X, Image, Phone, User, Upload, Calendar, Filter, FileText } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid } from 'recharts';
 import { toast } from "sonner";
 import VoiceRecorder from '../components/VoiceRecorder';
@@ -14,12 +14,17 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "../componen
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
-// 11 GOVERNANCE CATEGORIES
+// 11 GOVERNANCE CATEGORIES (English Standard)
 const CATEGORIES = [
     "Water & Irrigation", "Agriculture", "Forests & Environment", 
     "Health & Sanitation", "Education", "Infrastructure & Roads", 
     "Law & Order", "Welfare Schemes", "Finance & Taxation", 
     "Urban & Rural Development", "Electricity", "Miscellaneous"
+];
+
+// Geographical Hierarchy Options
+const GEO_TYPES = [
+    "All Areas", "Mandal", "Village", "Panchayat", "Town", "Ward", "Division", "City"
 ];
 
 const CATEGORY_COLORS = {
@@ -35,16 +40,41 @@ const CATEGORY_COLORS = {
     "Urban & Rural Development": "#8b5cf6",
     "Electricity": "#fbbf24",
     "Miscellaneous": "#64748b",
-    "General": "#64748b"
+    "General": "#64748b",
+    "Emergency": "#dc2626"
+};
+
+// Format date and time
+const formatDateTime = (isoString) => {
+    if (!isoString) return { date: '-', time: '-' };
+    const dt = new Date(isoString);
+    return {
+        date: dt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
+        time: dt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })
+    };
+};
+
+// Normalize category to English
+const normalizeCategory = (category) => {
+    if (!category) return "Miscellaneous";
+    // Map any non-standard categories to standard English
+    const normalized = category.trim();
+    if (normalized === "General" || normalized === "Other" || normalized === "general") {
+        return "Miscellaneous";
+    }
+    // Check if it's already a valid category
+    if (CATEGORIES.includes(normalized)) return normalized;
+    return normalized;
 };
 
 // KPI Card Component
-const KpiCard = ({ title, value, icon: Icon, color }) => (
+const KpiCard = ({ title, value, icon: Icon, color, subtitle }) => (
     <Card className="bg-slate-900 border-slate-800">
         <CardContent className="p-5 flex justify-between items-center">
             <div>
                 <p className="text-slate-400 text-xs font-bold uppercase tracking-wider">{title}</p>
                 <p className={`text-3xl font-bold mt-1 ${color}`}>{value}</p>
+                {subtitle && <p className="text-xs text-slate-500">{subtitle}</p>}
             </div>
             <div className={`p-3 rounded-full bg-slate-800`}>
                 <Icon className={`h-6 w-6 ${color}`} />
@@ -56,7 +86,7 @@ const KpiCard = ({ title, value, icon: Icon, color }) => (
 // Grievance Detail Modal with 10-Step Workflow
 const GrievanceModal = ({ grievance, onClose, onUpdate }) => {
   const [loading, setLoading] = useState(false);
-  const [uploadMethod, setUploadMethod] = useState('file'); // 'file' or 'url'
+  const [uploadMethod, setUploadMethod] = useState('file');
   const [photoUrl, setPhotoUrl] = useState('');
   const [selectedFile, setSelectedFile] = useState(null);
   const fileInputRef = useRef(null);
@@ -65,6 +95,8 @@ const GrievanceModal = ({ grievance, onClose, onUpdate }) => {
 
   const token = localStorage.getItem('token');
   const status = grievance.status?.toUpperCase();
+  const { date, time } = formatDateTime(grievance.created_at);
+  const displayCategory = normalizeCategory(grievance.category || grievance.issue_type);
 
   const handleStartWork = async () => {
     setLoading(true);
@@ -88,12 +120,10 @@ const GrievanceModal = ({ grievance, onClose, onUpdate }) => {
   const handleFileSelect = (e) => {
     const file = e.target.files[0];
     if (file) {
-      // Validate file type
-      if (!file.type.startsWith('image/')) {
-        toast.error("Please select an image file");
+      if (!file.type.startsWith('image/') && file.type !== 'application/pdf') {
+        toast.error("Please select an image or PDF file");
         return;
       }
-      // Validate file size (max 10MB)
       if (file.size > 10 * 1024 * 1024) {
         toast.error("File size must be less than 10MB");
         return;
@@ -105,10 +135,8 @@ const GrievanceModal = ({ grievance, onClose, onUpdate }) => {
 
   const handleUploadPhoto = async () => {
     setLoading(true);
-    
     try {
       if (uploadMethod === 'file' && selectedFile) {
-        // Upload file from device
         const formData = new FormData();
         formData.append('file', selectedFile);
         
@@ -119,7 +147,7 @@ const GrievanceModal = ({ grievance, onClose, onUpdate }) => {
         });
         
         if (res.ok) {
-          toast.success("Photo uploaded successfully from device!");
+          toast.success("Photo uploaded successfully!");
           setSelectedFile(null);
           onUpdate();
         } else {
@@ -127,7 +155,6 @@ const GrievanceModal = ({ grievance, onClose, onUpdate }) => {
           toast.error(err.detail || "Failed to upload photo");
         }
       } else if (uploadMethod === 'url' && photoUrl) {
-        // Upload via URL
         const res = await fetch(`${BACKEND_URL}/api/grievances/${grievance.id}/upload-resolution-photo`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
@@ -135,7 +162,7 @@ const GrievanceModal = ({ grievance, onClose, onUpdate }) => {
         });
         
         if (res.ok) {
-          toast.success("Photo URL saved successfully!");
+          toast.success("Photo URL saved!");
           setPhotoUrl('');
           onUpdate();
         } else {
@@ -159,7 +186,7 @@ const GrievanceModal = ({ grievance, onClose, onUpdate }) => {
         body: JSON.stringify({ send_notification: true })
       });
       if (res.ok) {
-        toast.success("Grievance marked as resolved! Citizen will be notified.");
+        toast.success("Grievance resolved! Citizen notified.");
         onUpdate();
         onClose();
       } else {
@@ -178,9 +205,6 @@ const GrievanceModal = ({ grievance, onClose, onUpdate }) => {
     'RESOLVED': 'bg-green-600',
     'ASSIGNED': 'bg-purple-600'
   };
-
-  // Get display category
-  const displayCategory = grievance.category || grievance.issue_type || "General";
 
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
@@ -206,26 +230,52 @@ const GrievanceModal = ({ grievance, onClose, onUpdate }) => {
 
         {/* Content */}
         <div className="p-6 space-y-6">
-          {/* Citizen Info */}
-          <div className="grid grid-cols-2 gap-4">
+          {/* Timestamp Display - NEW */}
+          <div className="flex items-center gap-4 text-sm bg-slate-800/50 p-3 rounded-lg">
             <div className="flex items-center gap-2 text-slate-300">
-              <User className="h-4 w-4 text-slate-500" />
-              <span>{grievance.citizen_name || grievance.village?.split('(')[0] || "Anonymous"}</span>
+              <Calendar className="h-4 w-4 text-orange-500" />
+              <span className="font-semibold">{date}</span>
             </div>
             <div className="flex items-center gap-2 text-slate-300">
-              <Phone className="h-4 w-4 text-slate-500" />
-              <span>{grievance.citizen_phone || "N/A"}</span>
-            </div>
-            <div className="flex items-center gap-2 text-slate-300 col-span-2">
-              <MapPin className="h-4 w-4 text-slate-500" />
-              <span>{grievance.location || grievance.village}</span>
+              <Clock className="h-4 w-4 text-orange-500" />
+              <span className="font-semibold">{time}</span>
             </div>
           </div>
 
-          {/* Description */}
-          <div>
-            <Label className="text-slate-400 text-xs uppercase">Issue Description</Label>
-            <p className="text-white mt-1 bg-slate-800 p-3 rounded-lg">{grievance.description}</p>
+          {/* Standardized Format Display */}
+          <div className="space-y-3 bg-slate-800/30 p-4 rounded-lg border border-slate-700">
+            <p className="text-xs text-orange-500 uppercase font-bold mb-3">Grievance Details (Standardized Format)</p>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label className="text-slate-500 text-xs">Name of the Person</Label>
+                <p className="text-white font-medium">{grievance.citizen_name || "Anonymous"}</p>
+              </div>
+              <div>
+                <Label className="text-slate-500 text-xs">Contact Number</Label>
+                <p className="text-white font-medium">{grievance.citizen_phone || "N/A"}</p>
+              </div>
+            </div>
+            
+            <div>
+              <Label className="text-slate-500 text-xs">Area (Mandal/Village/Town/Ward/Division)</Label>
+              <p className="text-white font-medium">{grievance.village || grievance.location || "Not specified"}</p>
+            </div>
+            
+            <div>
+              <Label className="text-slate-500 text-xs">Issue Category</Label>
+              <Badge 
+                className="mt-1"
+                style={{ backgroundColor: CATEGORY_COLORS[displayCategory] || '#64748b' }}
+              >
+                {displayCategory}
+              </Badge>
+            </div>
+            
+            <div>
+              <Label className="text-slate-500 text-xs">Issue Description</Label>
+              <p className="text-white mt-1 bg-slate-800 p-3 rounded-lg whitespace-pre-wrap">{grievance.description}</p>
+            </div>
           </div>
 
           {/* Media */}
@@ -265,28 +315,20 @@ const GrievanceModal = ({ grievance, onClose, onUpdate }) => {
             </div>
           )}
 
-          {/* 10-STEP WORKFLOW ACTIONS */}
+          {/* Workflow Actions */}
           <div className="border-t border-slate-800 pt-6">
             <Label className="text-slate-400 text-xs uppercase mb-4 block">Workflow Actions</Label>
             
-            {/* Step 8a: Start Work */}
             {status === 'PENDING' && (
-              <Button 
-                onClick={handleStartWork} 
-                disabled={loading}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white mb-3"
-                data-testid="start-work-btn"
-              >
+              <Button onClick={handleStartWork} disabled={loading} className="w-full bg-blue-600 hover:bg-blue-700 text-white mb-3">
                 <Play className="h-4 w-4 mr-2" /> Start Work
               </Button>
             )}
 
-            {/* Step 8b: Upload Photo (required before resolve) */}
             {(status === 'IN_PROGRESS' || status === 'ASSIGNED') && !grievance.resolution_image_url && (
               <div className="space-y-3 mb-3 bg-slate-800 p-4 rounded-lg">
                 <Label className="text-white text-sm">Upload Resolution Photo</Label>
                 
-                {/* Upload Method Toggle */}
                 <div className="flex gap-2">
                   <Button 
                     variant={uploadMethod === 'file' ? 'default' : 'outline'}
@@ -308,17 +350,8 @@ const GrievanceModal = ({ grievance, onClose, onUpdate }) => {
                 
                 {uploadMethod === 'file' ? (
                   <div className="space-y-2">
-                    <input
-                      type="file"
-                      ref={fileInputRef}
-                      onChange={handleFileSelect}
-                      accept="image/*"
-                      className="hidden"
-                    />
-                    <div 
-                      onClick={() => fileInputRef.current?.click()}
-                      className="border-2 border-dashed border-slate-600 rounded-lg p-6 text-center cursor-pointer hover:border-orange-500 transition-colors"
-                    >
+                    <input type="file" ref={fileInputRef} onChange={handleFileSelect} accept="image/*,application/pdf" className="hidden" />
+                    <div onClick={() => fileInputRef.current?.click()} className="border-2 border-dashed border-slate-600 rounded-lg p-6 text-center cursor-pointer hover:border-orange-500 transition-colors">
                       {selectedFile ? (
                         <div className="text-green-400">
                           <CheckCircle className="h-8 w-8 mx-auto mb-2" />
@@ -328,42 +361,23 @@ const GrievanceModal = ({ grievance, onClose, onUpdate }) => {
                       ) : (
                         <div className="text-slate-400">
                           <Camera className="h-8 w-8 mx-auto mb-2" />
-                          <p>Click to select photo</p>
-                          <p className="text-xs">or drag and drop</p>
+                          <p>Click to select photo/PDF</p>
                         </div>
                       )}
                     </div>
                   </div>
                 ) : (
-                  <Input 
-                    placeholder="Enter photo URL..." 
-                    value={photoUrl}
-                    onChange={(e) => setPhotoUrl(e.target.value)}
-                    className="bg-slate-900 border-slate-700 text-white"
-                  />
+                  <Input placeholder="Enter photo URL..." value={photoUrl} onChange={(e) => setPhotoUrl(e.target.value)} className="bg-slate-900 border-slate-700 text-white" />
                 )}
                 
-                <Button 
-                  onClick={handleUploadPhoto}
-                  disabled={loading || (uploadMethod === 'file' ? !selectedFile : !photoUrl)}
-                  className="w-full bg-purple-600 hover:bg-purple-700"
-                  data-testid="upload-photo-btn"
-                >
-                  <Upload className="h-4 w-4 mr-2" /> 
-                  {loading ? 'Uploading...' : 'Upload Photo'}
+                <Button onClick={handleUploadPhoto} disabled={loading || (uploadMethod === 'file' ? !selectedFile : !photoUrl)} className="w-full bg-purple-600 hover:bg-purple-700">
+                  <Upload className="h-4 w-4 mr-2" /> {loading ? 'Uploading...' : 'Upload Photo'}
                 </Button>
-                <p className="text-xs text-slate-500 text-center">Photo verification required before marking as resolved</p>
               </div>
             )}
 
-            {/* Step 8c: Mark Resolved */}
             {(status === 'IN_PROGRESS' || status === 'ASSIGNED') && grievance.resolution_image_url && (
-              <Button 
-                onClick={handleResolve}
-                disabled={loading}
-                className="w-full bg-green-600 hover:bg-green-700 text-white"
-                data-testid="mark-resolved-btn"
-              >
+              <Button onClick={handleResolve} disabled={loading} className="w-full bg-green-600 hover:bg-green-700 text-white">
                 <CheckCircle className="h-4 w-4 mr-2" /> Mark Resolved & Notify Citizen
               </Button>
             )}
@@ -372,9 +386,7 @@ const GrievanceModal = ({ grievance, onClose, onUpdate }) => {
               <div className="bg-green-900/30 border border-green-800 rounded-lg p-4 text-center">
                 <CheckCircle className="h-8 w-8 text-green-400 mx-auto mb-2" />
                 <p className="text-green-400 font-semibold">Grievance Resolved</p>
-                {grievance.feedback_rating && (
-                  <p className="text-slate-400 text-sm mt-1">Citizen rated: {grievance.feedback_rating}/5 stars</p>
-                )}
+                {grievance.feedback_rating && <p className="text-slate-400 text-sm mt-1">Citizen rated: {grievance.feedback_rating}/5 stars</p>}
               </div>
             )}
           </div>
@@ -384,14 +396,20 @@ const GrievanceModal = ({ grievance, onClose, onUpdate }) => {
   );
 };
 
+// Main Help People Component
 const HelpPeople = () => {
   const [grievances, setGrievances] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filterText, setFilterText] = useState("");
-  const [sortBy, setSortBy] = useState("priority");
+  const [filterCategory, setFilterCategory] = useState("All");
+  const [filterGeoType, setFilterGeoType] = useState("All Areas");
+  const [filterPriority, setFilterPriority] = useState("All");
+  const [sortBy, setSortBy] = useState("date");
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [showVoiceRecorder, setShowVoiceRecorder] = useState(false);
   const [selectedGrievance, setSelectedGrievance] = useState(null);
+  const [mediaFile, setMediaFile] = useState(null);
+  const mediaInputRef = useRef(null);
 
   const [formData, setFormData] = useState({
     citizen_name: "",
@@ -413,10 +431,19 @@ const HelpPeople = () => {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if(res.ok) setGrievances(await res.json());
-    } catch(e) { 
-      console.error(e); 
-    } finally { 
-      setLoading(false); 
+    } catch(e) { console.error(e); } 
+    finally { setLoading(false); }
+  };
+
+  const handleMediaSelect = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      if (!file.type.startsWith('image/') && file.type !== 'application/pdf') {
+        toast.error("Please select an image or PDF file");
+        return;
+      }
+      setMediaFile(file);
+      toast.success(`Attached: ${file.name}`);
     }
   };
 
@@ -428,8 +455,9 @@ const HelpPeople = () => {
 
         const payload = { 
           ...formData, 
-          status: 'pending', 
-          deadline_timestamp: deadline 
+          status: 'PENDING', 
+          deadline_timestamp: deadline,
+          village: formData.location // Map location to village field
         };
 
         const res = await fetch(`${BACKEND_URL}/api/grievances/`, {
@@ -439,19 +467,31 @@ const HelpPeople = () => {
         });
 
         if (res.ok) {
+            const newGrievance = await res.json();
+            
+            // Upload media if attached
+            if (mediaFile && newGrievance.id) {
+              const formDataMedia = new FormData();
+              formDataMedia.append('file', mediaFile);
+              
+              await fetch(`${BACKEND_URL}/api/grievances/${newGrievance.id}/upload-file`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` },
+                body: formDataMedia
+              });
+            }
+            
             toast.success("Grievance Registered Successfully");
             setFormData({ citizen_name: "", citizen_phone: "", location: "", category: "Miscellaneous", description: "", priority_level: "MEDIUM" });
+            setMediaFile(null);
             fetchGrievances();
             setIsAddOpen(false);
         } else {
             toast.error("Registration Failed");
         }
-    } catch(e) { 
-        toast.error("Registration Failed", { description: e.message }); 
-    }
+    } catch(e) { toast.error("Registration Failed: " + e.message); }
   };
 
-  // Category to Priority mapping (11-Sector Framework)
   const getCategoryPriority = (category) => {
     if (["Law & Order", "Health & Sanitation", "Electricity"].includes(category)) return "CRITICAL";
     if (["Water & Irrigation", "Infrastructure & Roads", "Agriculture"].includes(category)) return "HIGH";
@@ -463,25 +503,28 @@ const HelpPeople = () => {
   const total = grievances.length;
   const resolved = grievances.filter(g => g.status === 'resolved' || g.status === 'RESOLVED').length;
   const pending = grievances.filter(g => g.status !== 'resolved' && g.status !== 'RESOLVED').length;
-  const longPending = grievances.filter(g => {
-      if (g.status === 'resolved' || g.status === 'RESOLVED') return false;
-      return Math.ceil(Math.abs(new Date() - new Date(g.created_at)) / (86400000)) > 7;
-  }).length;
+  const critical = grievances.filter(g => g.priority_level === 'CRITICAL' && g.status !== 'resolved' && g.status !== 'RESOLVED').length;
 
   const topCritical = grievances
     .filter(g => g.priority_level === 'CRITICAL' && g.status !== 'resolved' && g.status !== 'RESOLVED')
     .slice(0, 3);
 
-  // Filtered List
+  // Filtered List with enhanced filters
   const filteredList = grievances.filter(g => {
+    // Text search
     const searchText = filterText.toLowerCase();
-    return (
+    const textMatch = !filterText || 
       (g.citizen_name || '').toLowerCase().includes(searchText) ||
       (g.village || '').toLowerCase().includes(searchText) ||
-      (g.category || '').toLowerCase().includes(searchText) ||
-      (g.issue_type || '').toLowerCase().includes(searchText) ||
-      (g.description || '').toLowerCase().includes(searchText)
-    );
+      (g.description || '').toLowerCase().includes(searchText);
+    
+    // Category filter
+    const categoryMatch = filterCategory === "All" || normalizeCategory(g.category || g.issue_type) === filterCategory;
+    
+    // Priority filter
+    const priorityMatch = filterPriority === "All" || g.priority_level === filterPriority;
+    
+    return textMatch && categoryMatch && priorityMatch;
   });
 
   // Sorted List
@@ -490,37 +533,21 @@ const HelpPeople = () => {
       const priorityOrder = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
       return (priorityOrder[a.priority_level] || 3) - (priorityOrder[b.priority_level] || 3);
     }
-    if (sortBy === "date") {
-      return new Date(b.created_at) - new Date(a.created_at);
-    }
-    return 0;
+    return new Date(b.created_at) - new Date(a.created_at);
   });
 
+  // Graph data - ALWAYS in English
   const getGraphData = () => {
       const counts = {};
       grievances.forEach(g => {
-          // Use category first, then issue_type, then default to Miscellaneous
-          let cat = g.category || g.issue_type || "Miscellaneous";
-          // Normalize "General" to "Miscellaneous"
-          if (cat === "General" || cat === "general" || cat === "Other") {
-            cat = "Miscellaneous";
-          }
+          const cat = normalizeCategory(g.category || g.issue_type);
           counts[cat] = (counts[cat] || 0) + 1;
       });
       return Object.keys(counts).map(k => ({ name: k, count: counts[k] })).sort((a,b) => b.count - a.count).slice(0, 6);
   };
 
-  // Get display category for a grievance
-  const getDisplayCategory = (g) => {
-    let cat = g.category || g.issue_type || "Miscellaneous";
-    if (cat === "General" || cat === "general" || cat === "Other") {
-      cat = "Miscellaneous";
-    }
-    return cat;
-  };
-
   return (
-    <div className="p-6 space-y-8 text-white" data-testid="help-people-page">
+    <div className="p-6 space-y-6 text-white" data-testid="help-people-page">
       
       {/* Header */}
       <div className="flex items-center gap-3 border-b border-slate-800 pb-4">
@@ -531,43 +558,43 @@ const HelpPeople = () => {
           </div>
       </div>
 
-      {/* 1. KPIs */}
+      {/* KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <KpiCard title="Total" value={total} icon={List} color="text-blue-400" />
           <KpiCard title="Resolved" value={resolved} icon={CheckCircle} color="text-green-400" />
           <KpiCard title="Pending" value={pending} icon={Clock} color="text-yellow-400" />
-          <KpiCard title="Long Pending (>7 Days)" value={longPending} icon={AlertCircle} color="text-red-400" />
+          <KpiCard title="Critical" value={critical} icon={AlertCircle} color="text-red-400" />
       </div>
 
-      {/* 2. Top 3 Critical */}
+      {/* Top Critical */}
       <div>
           <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest border-b border-slate-800 pb-2 mb-3">Priority 1: Unresolved Critical</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {topCritical.length > 0 ? topCritical.map(issue => (
-                  <Card 
-                    key={issue.id} 
-                    className="bg-red-950/20 border-red-900/50 border relative overflow-hidden cursor-pointer hover:border-red-700 transition-all"
-                    onClick={() => setSelectedGrievance(issue)}
-                    data-testid={`critical-issue-${issue.id}`}
-                  >
-                      <div className="absolute top-0 right-0 p-2 opacity-20"><AlertTriangle className="h-16 w-16 text-red-500" /></div>
+              {topCritical.length > 0 ? topCritical.map(issue => {
+                const { date, time } = formatDateTime(issue.created_at);
+                return (
+                  <Card key={issue.id} className="bg-red-950/20 border-red-900/50 border cursor-pointer hover:border-red-700 transition-all" onClick={() => setSelectedGrievance(issue)}>
                       <CardHeader className="pb-2">
                           <div className="flex justify-between">
                             <Badge className="bg-red-600 text-white">CRITICAL</Badge>
                             <span className="text-xs text-red-300 font-mono">#{issue.id?.slice(0,6)}</span>
                           </div>
-                          <CardTitle className="text-white text-md mt-2 line-clamp-1">{getDisplayCategory(issue)}</CardTitle>
+                          <CardTitle className="text-white text-md mt-2 line-clamp-1">{normalizeCategory(issue.category || issue.issue_type)}</CardTitle>
                       </CardHeader>
                       <CardContent>
                           <p className="text-slate-300 text-sm line-clamp-2">{issue.description}</p>
-                          <div className="flex items-center gap-2 text-xs text-slate-500 mt-2"><MapPin className="h-3 w-3" /> {issue.location || issue.village}</div>
+                          <div className="flex items-center justify-between text-xs text-slate-500 mt-2">
+                            <span className="flex items-center gap-1"><MapPin className="h-3 w-3" /> {issue.village || issue.location}</span>
+                            <span className="flex items-center gap-1"><Calendar className="h-3 w-3" /> {date}</span>
+                          </div>
                       </CardContent>
                   </Card>
-              )) : <div className="col-span-3 p-4 text-center text-slate-500 border border-dashed border-slate-800 rounded">No critical issues.</div>}
+                );
+              }) : <div className="col-span-3 p-4 text-center text-slate-500 border border-dashed border-slate-800 rounded">No critical issues.</div>}
           </div>
       </div>
 
-      {/* 3. Add Entry (Collapsible) */}
+      {/* Add Grievance Form */}
       <Collapsible open={isAddOpen} onOpenChange={setIsAddOpen} className="border border-slate-700/50 rounded-xl bg-slate-900 shadow-md">
           <CollapsibleTrigger className="w-full">
               <div className="flex items-center justify-between p-5 cursor-pointer hover:bg-slate-800/50 transition-all">
@@ -577,19 +604,33 @@ const HelpPeople = () => {
           </CollapsibleTrigger>
           <CollapsibleContent>
               <div className="p-6 border-t border-slate-800 space-y-4 bg-slate-950">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <div><Label className="text-white">Name</Label><Input data-testid="grievance-name" className="bg-slate-900 border-slate-700 text-white" value={formData.citizen_name} onChange={e => setFormData({...formData, citizen_name: e.target.value})} /></div>
-                      <div><Label className="text-white">Contact</Label><Input data-testid="grievance-phone" className="bg-slate-900 border-slate-700 text-white" value={formData.citizen_phone} onChange={e => setFormData({...formData, citizen_phone: e.target.value})} /></div>
-                      <div><Label className="text-white">Area</Label><Input data-testid="grievance-area" className="bg-slate-900 border-slate-700 text-white" value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})} /></div>
-                  </div>
+                  {/* Standardized Format Fields */}
+                  <p className="text-xs text-orange-500 uppercase font-bold">Grievance Registration (Standardized Format)</p>
+                  
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                          <Label className="text-white">Category</Label>
+                        <Label className="text-white">Name of the Person *</Label>
+                        <Input className="bg-slate-900 border-slate-700 text-white" placeholder="Full Name" value={formData.citizen_name} onChange={e => setFormData({...formData, citizen_name: e.target.value})} />
+                      </div>
+                      <div>
+                        <Label className="text-white">Contact Number *</Label>
+                        <Input className="bg-slate-900 border-slate-700 text-white" placeholder="Phone Number" value={formData.citizen_phone} onChange={e => setFormData({...formData, citizen_phone: e.target.value})} />
+                      </div>
+                  </div>
+                  
+                  <div>
+                    <Label className="text-white">Area (Mandal/Village/Town/Ward/Division) *</Label>
+                    <Input className="bg-slate-900 border-slate-700 text-white" placeholder="Location/Area Name" value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})} />
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                          <Label className="text-white">Issue Category *</Label>
                           <Select value={formData.category} onValueChange={(val) => {
                               const p = getCategoryPriority(val);
                               setFormData({...formData, category: val, priority_level: p});
                           }}>
-                              <SelectTrigger data-testid="grievance-category" className="bg-slate-900 border-slate-700 text-white"><SelectValue placeholder="Select" /></SelectTrigger>
+                              <SelectTrigger className="bg-slate-900 border-slate-700 text-white"><SelectValue /></SelectTrigger>
                               <SelectContent className="bg-slate-900 border-slate-800 text-white max-h-[250px]">
                                   {CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                               </SelectContent>
@@ -602,89 +643,130 @@ const HelpPeople = () => {
                             }>{formData.priority_level}</Badge>
                           </p>
                       </div>
-                      <div className="relative">
-                          <Label className="text-white">Description</Label>
-                          <Textarea data-testid="grievance-description" className="bg-slate-900 border-slate-700 text-white h-24 pr-12" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} />
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="ghost"
-                            className="absolute bottom-2 right-2 h-8 w-8 p-0 hover:bg-slate-800"
-                            onClick={() => setShowVoiceRecorder(true)}
-                          >
-                            <Mic className="h-4 w-4 text-orange-500" />
-                          </Button>
+                      <div>
+                        <Label className="text-white">Attach Photo/Document (Optional)</Label>
+                        <input type="file" ref={mediaInputRef} onChange={handleMediaSelect} accept="image/*,application/pdf" className="hidden" />
+                        <div onClick={() => mediaInputRef.current?.click()} className="mt-1 border-2 border-dashed border-slate-700 rounded-lg p-4 text-center cursor-pointer hover:border-orange-500 transition-colors">
+                          {mediaFile ? (
+                            <div className="text-green-400 flex items-center justify-center gap-2">
+                              <FileText className="h-4 w-4" />
+                              <span className="text-sm">{mediaFile.name}</span>
+                            </div>
+                          ) : (
+                            <div className="text-slate-500 flex items-center justify-center gap-2">
+                              <Upload className="h-4 w-4" />
+                              <span className="text-sm">Click to attach</span>
+                            </div>
+                          )}
+                        </div>
                       </div>
                   </div>
-                  <Button data-testid="register-grievance-btn" onClick={handleRegister} className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold">Register Ticket</Button>
+                  
+                  <div className="relative">
+                      <Label className="text-white">Issue Description *</Label>
+                      <Textarea className="bg-slate-900 border-slate-700 text-white h-24 pr-12" placeholder="Describe the problem in detail..." value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} />
+                      <Button type="button" size="sm" variant="ghost" className="absolute bottom-2 right-2 h-8 w-8 p-0 hover:bg-slate-800" onClick={() => setShowVoiceRecorder(true)}>
+                        <Mic className="h-4 w-4 text-orange-500" />
+                      </Button>
+                  </div>
+                  
+                  <Button onClick={handleRegister} className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold">Register Grievance</Button>
               </div>
           </CollapsibleContent>
       </Collapsible>
 
-      {/* 4. Search & Filter */}
-      <div className="flex gap-4 items-center bg-slate-900/50 p-4 rounded-xl border border-slate-800">
-          <Search className="h-4 w-4 text-slate-500" />
-          <Input data-testid="search-grievances" className="bg-transparent border-none text-white focus-visible:ring-0" placeholder="Search by name, category, description..." value={filterText} onChange={e => setFilterText(e.target.value)} />
-          <Select onValueChange={setSortBy} defaultValue="priority">
-            <SelectTrigger className="w-[130px] bg-slate-950 border-slate-700 text-white text-xs"><SelectValue /></SelectTrigger>
-            <SelectContent>
+      {/* Enhanced Filters */}
+      <div className="flex flex-wrap gap-4 items-center bg-slate-900/50 p-4 rounded-xl border border-slate-800">
+          <div className="flex items-center gap-2">
+            <Filter className="h-4 w-4 text-slate-500" />
+            <span className="text-sm text-slate-400">Filters:</span>
+          </div>
+          
+          <div className="flex-1 min-w-[200px]">
+            <Input className="bg-slate-900 border-slate-700 text-white" placeholder="Search name, area, description..." value={filterText} onChange={e => setFilterText(e.target.value)} />
+          </div>
+          
+          <Select onValueChange={setFilterCategory} defaultValue="All">
+            <SelectTrigger className="w-[180px] bg-slate-900 border-slate-700 text-white text-sm"><SelectValue placeholder="Category" /></SelectTrigger>
+            <SelectContent className="bg-slate-900 border-slate-800 text-white">
+              <SelectItem value="All">All Categories</SelectItem>
+              {CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          
+          <Select onValueChange={setFilterPriority} defaultValue="All">
+            <SelectTrigger className="w-[130px] bg-slate-900 border-slate-700 text-white text-sm"><SelectValue placeholder="Priority" /></SelectTrigger>
+            <SelectContent className="bg-slate-900 border-slate-800 text-white">
+              <SelectItem value="All">All Priority</SelectItem>
+              <SelectItem value="CRITICAL">Critical</SelectItem>
+              <SelectItem value="HIGH">High</SelectItem>
+              <SelectItem value="MEDIUM">Medium</SelectItem>
+              <SelectItem value="LOW">Low</SelectItem>
+            </SelectContent>
+          </Select>
+          
+          <Select onValueChange={setSortBy} defaultValue="date">
+            <SelectTrigger className="w-[120px] bg-slate-900 border-slate-700 text-white text-sm"><SelectValue /></SelectTrigger>
+            <SelectContent className="bg-slate-900 border-slate-800 text-white">
+              <SelectItem value="date">Newest</SelectItem>
               <SelectItem value="priority">Priority</SelectItem>
-              <SelectItem value="date">Date</SelectItem>
             </SelectContent>
           </Select>
       </div>
 
-      {/* 5. Split View */}
+      {/* Split View */}
       <div className="flex flex-col lg:flex-row gap-6 min-h-[500px]">
           {/* List */}
           <div className="flex-1 space-y-3 max-h-[600px] overflow-y-auto pr-2">
-              {sortedList.map(t => (
-                  <div 
-                    key={t.id} 
-                    className="p-4 bg-slate-900 border border-slate-800 rounded-lg flex justify-between items-center hover:bg-slate-800/50 cursor-pointer transition-all"
-                    onClick={() => setSelectedGrievance(t)}
-                    data-testid={`grievance-item-${t.id}`}
-                  >
-                      <div className="flex-1">
-                          <div className="flex items-center gap-3 flex-wrap">
-                              <span className="text-white font-semibold">{t.citizen_name || t.village?.split('(')[0] || "Anonymous"}</span>
-                              <Badge 
-                                variant="outline" 
-                                className="text-slate-300 border-slate-600"
-                                style={{ borderColor: CATEGORY_COLORS[getDisplayCategory(t)] || '#64748b' }}
-                              >
-                                {getDisplayCategory(t)}
+              {sortedList.length === 0 ? (
+                <div className="p-8 text-center text-slate-500 border border-dashed border-slate-800 rounded-lg">
+                  No grievances match your filters
+                </div>
+              ) : sortedList.map(t => {
+                const { date, time } = formatDateTime(t.created_at);
+                const displayCat = normalizeCategory(t.category || t.issue_type);
+                return (
+                  <div key={t.id} className="p-4 bg-slate-900 border border-slate-800 rounded-lg cursor-pointer hover:bg-slate-800/50 transition-all" onClick={() => setSelectedGrievance(t)}>
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 flex-wrap mb-1">
+                              <span className="text-white font-semibold">{t.citizen_name || "Anonymous"}</span>
+                              <Badge variant="outline" className="text-slate-300 border-slate-600" style={{ borderColor: CATEGORY_COLORS[displayCat] }}>
+                                {displayCat}
                               </Badge>
                               <Badge className={
                                 t.priority_level === 'CRITICAL' ? 'bg-red-600' : 
                                 t.priority_level === 'HIGH' ? 'bg-orange-600' : 
                                 t.priority_level === 'MEDIUM' ? 'bg-yellow-600' : 'bg-blue-600'
                               }>{t.priority_level || 'LOW'}</Badge>
-                              {t.feedback_rating && (
-                                <Badge className="bg-yellow-600 flex items-center gap-1">
-                                  <Star className="h-3 w-3" /> {t.feedback_rating}/5
-                                </Badge>
-                              )}
                           </div>
-                          <p className="text-sm text-slate-400 mt-1 line-clamp-1">{t.description}</p>
+                          <p className="text-sm text-slate-400 line-clamp-1">{t.description}</p>
                           <div className="flex gap-4 mt-2 text-xs text-slate-500">
-                            <span className="flex items-center gap-1"><MapPin className="h-3 w-3" /> {t.location || t.village?.split('(')[0]}</span>
+                            <span className="flex items-center gap-1"><MapPin className="h-3 w-3" /> {t.village || t.location || '-'}</span>
+                            <span className="flex items-center gap-1"><Calendar className="h-3 w-3" /> {date}</span>
+                            <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {time}</span>
                             <span className={`uppercase font-bold ${
                               t.status === 'RESOLVED' || t.status === 'resolved' ? 'text-green-500' : 
                               t.status === 'IN_PROGRESS' ? 'text-blue-500' : 'text-yellow-500'
                             }`}>{t.status}</span>
-                            {t.resolution_image_url && <span className="text-green-400 flex items-center gap-1"><Camera className="h-3 w-3" /> Verified</span>}
                           </div>
+                        </div>
+                        <Button variant="secondary" size="sm" className="bg-slate-800 ml-4">View</Button>
                       </div>
-                      <Button variant="secondary" size="sm" className="bg-slate-800 ml-4">Manage</Button>
                   </div>
-              ))}
+                );
+              })}
           </div>
           
-          {/* Graph */}
+          {/* Graph - Categories in English */}
           <div className="w-full lg:w-[450px]">
               <Card className="bg-slate-900 border-slate-800 h-full">
-                  <CardHeader className="border-b border-slate-800 pb-2"><CardTitle className="text-white text-sm flex gap-2"><BarChart3 className="h-4 w-4 text-purple-500"/> Sector Analysis</CardTitle></CardHeader>
+                  <CardHeader className="border-b border-slate-800 pb-2">
+                    <CardTitle className="text-white text-sm flex gap-2">
+                      <BarChart3 className="h-4 w-4 text-purple-500"/> 
+                      Category Analysis (English)
+                    </CardTitle>
+                  </CardHeader>
                   <CardContent className="h-[400px] pt-4">
                       <ResponsiveContainer width="100%" height="100%">
                           <BarChart data={getGraphData()} layout="vertical" margin={{left:10}}>
@@ -722,7 +804,6 @@ const HelpPeople = () => {
           onClose={() => setSelectedGrievance(null)}
           onUpdate={() => {
             fetchGrievances();
-            // Refresh the selected grievance
             const token = localStorage.getItem('token');
             fetch(`${BACKEND_URL}/api/grievances/${selectedGrievance.id}`, {
               headers: { 'Authorization': `Bearer ${token}` }
