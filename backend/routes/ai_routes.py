@@ -206,7 +206,10 @@ async def translate_text(text: str, target_lang: str) -> str:
 # ==============================================================================
 
 async def extract_grievance_from_media(media_data: bytes, media_type: str) -> Dict[str, Any]:
-    """Extract grievance data from PDF or Image using GPT-4o"""
+    """
+    HIGH-PRECISION "Deep OCR" extraction for PDF/Image.
+    Handles mixed languages (Hindi name, English description) and normalizes ALL fields to English.
+    """
     try:
         media_base64 = base64.b64encode(media_data).decode('utf-8')
         
@@ -219,31 +222,62 @@ async def extract_grievance_from_media(media_data: bytes, media_type: str) -> Di
         
         chat = LlmChat(
             api_key=EMERGENT_LLM_KEY,
-            session_id=f"media-{uuid.uuid4()}",
-            system_message="""You extract grievance information from documents/images for a government system.
-Extract: Name, Contact, Area, Category (ENGLISH only), Description, Language.
-Categories must be from: Water & Irrigation, Agriculture, Health & Sanitation, Education, Infrastructure & Roads, Law & Order, Welfare Schemes, Electricity, Miscellaneous."""
+            session_id=f"deep-ocr-{uuid.uuid4()}",
+            system_message="""You are an expert OCR system for government grievance documents in India.
+Your task is DEEP OCR with ENGLISH NORMALIZATION.
+
+CRITICAL INSTRUCTIONS:
+1. The document may contain MIXED LANGUAGES (Hindi, Telugu, Tamil, English mixed together)
+2. You MUST identify and extract ALL entities regardless of script
+3. ALL OUTPUT FIELDS MUST BE IN ENGLISH - transliterate/translate everything
+
+ENTITY EXTRACTION RULES:
+- NAME: Look for "Name", "Applicant", "नाम", "పేరు", "பெயர்" etc. TRANSLITERATE to English (e.g., "राम कुमार" → "Ram Kumar")
+- AREA: Look for "Mandal", "Village", "Ward", "मंडल", "गांव", "మండలం", "గ్రామం". TRANSLITERATE accurately (e.g., "అల్వాల్" → "Alwal")
+- CONTACT: Extract any 10-digit phone numbers
+- CATEGORY: Map to official English categories only
+- DESCRIPTION: Read entire content in any language, summarize in CLEAR ENGLISH
+
+OFFICIAL CATEGORIES (pick one):
+Water & Irrigation, Agriculture, Health & Sanitation, Education, Infrastructure & Roads, 
+Law & Order, Welfare Schemes, Electricity, Forests & Environment, Finance & Taxation, 
+Urban & Rural Development, Miscellaneous"""
         ).with_model("openai", "gpt-4o")
         
-        prompt = """Analyze this document/image and extract:
-1. Name (if available, else null)
-2. Contact number (if available)
-3. Area/Location
-4. Issue Category (ENGLISH from official list)
-5. Issue Description (summarized in ENGLISH)
-6. Document Language
+        prompt = """Perform DEEP OCR on this document/image.
 
-Return JSON only:
-{"name": null, "contact": null, "area": null, "category": "English category", "description": "English summary", "language": "code"}"""
+EXTRACT and NORMALIZE TO ENGLISH:
+1. Name (transliterate from any script to English)
+2. Contact Number (10 digits if found)
+3. Area/Location (transliterate Mandal/Village/Ward names to English)
+4. Issue Category (MUST be from official English list)
+5. Issue Description (translate/summarize in English)
+6. Original Document Language
+
+Return JSON only (no markdown):
+{
+    "name": "English transliterated name or null",
+    "contact": "phone number or null",
+    "area": "English transliterated area name or null",
+    "category": "Official English category",
+    "description": "English description/summary",
+    "language": "original language code (en/te/hi/ta)"
+}"""
         
         msg = UserMessage(text=prompt, file_contents=[FileContent(content_type=content_type, file_content_base64=media_base64)])
         result = await chat.send_message(msg)
         
         clean_result = result.replace('```json', '').replace('```', '').strip()
-        return json.loads(clean_result)
+        extracted = json.loads(clean_result)
+        
+        # Ensure category is from official list
+        if extracted.get('category') not in OFFICIAL_CATEGORIES:
+            extracted['category'] = map_to_official_category(extracted.get('category', ''))
+        
+        return extracted
         
     except Exception as e:
-        print(f"❌ Media extraction error: {e}")
+        print(f"❌ Deep OCR extraction error: {e}")
         return None
 
 
