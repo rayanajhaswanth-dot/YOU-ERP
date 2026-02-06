@@ -609,6 +609,38 @@ Return JSON only:
         return {"text": "", "issue_description": "", "location": "", "category": "Miscellaneous"}
 
 
+async def extract_from_pdf(pdf_data: bytes) -> Dict[str, Any]:
+    """Extract grievance information from PDF document using AI"""
+    try:
+        pdf_base64 = base64.b64encode(pdf_data).decode('utf-8')
+        
+        chat = LlmChat(
+            api_key=EMERGENT_LLM_KEY,
+            session_id=f"pdf-{uuid.uuid4()}",
+            system_message="You are an AI that extracts grievance information from PDF documents for a government grievance system."
+        ).with_model("openai", "gpt-4o")
+        
+        prompt = """Analyze this PDF document and extract any grievance-related information:
+1. Person's name (if mentioned)
+2. Contact details (phone, address)
+3. Location/Area mentioned
+4. Issue or complaint description
+5. Any dates or reference numbers
+
+Return JSON only:
+{"name": "extracted name or null", "phone": "phone if found or null", "area": "location/area", "issue_description": "main complaint", "category": "Water/Infrastructure/Health/Education/etc"}"""
+        
+        msg = UserMessage(text=prompt, file_contents=[FileContent(content_type="application/pdf", file_content_base64=pdf_base64)])
+        result = await chat.send_message(msg)
+        
+        clean_result = result.replace('```json', '').replace('```', '').strip()
+        return json.loads(clean_result)
+        
+    except Exception as e:
+        print(f"⚠️ PDF extraction error: {e}")
+        return {"name": None, "phone": None, "area": None, "issue_description": "", "category": "Miscellaneous"}
+
+
 # ==============================================================================
 # MAIN WEBHOOK HANDLER
 # ==============================================================================
@@ -728,6 +760,20 @@ async def process_conversation(phone: str, message: str, name: str, media_url: s
                             state["collected_data"]["area"] = extracted["location"]
                         if extracted.get("category"):
                             state["collected_data"]["category"] = extracted["category"]
+                
+                # Handle PDF documents
+                elif 'pdf' in media_content_type.lower():
+                    extracted = await extract_from_pdf(media_obj['buffer'])
+                    if extracted.get("issue_description"):
+                        message = extracted.get("issue_description", "")
+                    if extracted.get("name"):
+                        state["collected_data"]["name"] = extracted["name"]
+                    if extracted.get("phone"):
+                        state["collected_data"]["phone"] = extracted["phone"]
+                    if extracted.get("area"):
+                        state["collected_data"]["area"] = extracted["area"]
+                    if extracted.get("category"):
+                        state["collected_data"]["category"] = extracted["category"]
     
     # ===========================================================================
     # Multi-Turn Conversation Flow
