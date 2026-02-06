@@ -530,18 +530,19 @@ async def whatsapp_status():
     """Check WhatsApp bot status"""
     return {
         "status": "active",
-        "version": "3.0 - OSD Persona Intelligence",
+        "version": "3.1 - OSD Persona with General Knowledge",
         "features": [
-            "Intent Classification (CHAT/GRIEVANCE/STATUS/FEEDBACK)",
+            "Intent Classification (CHAT/GRIEVANCE/STATUS/FEEDBACK/GENERAL_QUERY)",
             "OSD Persona - Professional PA/OSD style responses",
+            "General Knowledge - Answers scheme/governance questions without registering grievance",
             "Native Language Resolution - Notifications in user's language",
             "Smart Chat - 'Thank you' is not registered as grievance",
             "Feedback Loop - Ratings stored, thank you response given",
-            "PDF/Image AI Extraction with GPT-4o",
+            "PDF/Image AI Extraction with GPT-4o (English normalization)",
             "Voice Transcription with Whisper",
             "English-only DB storage with language context",
             "Multilingual Support (Telugu, Hindi, Tamil, Kannada, Malayalam, Bengali)"
         ],
-        "intents": ["CHAT", "GRIEVANCE", "STATUS", "FEEDBACK"],
+        "intents": ["CHAT", "GRIEVANCE", "STATUS", "FEEDBACK", "GENERAL_QUERY"],
         "categories": OFFICIAL_CATEGORIES
     }
