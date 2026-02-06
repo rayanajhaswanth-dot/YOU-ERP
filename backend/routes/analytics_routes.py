@@ -11,6 +11,72 @@ from services.sentiment_engine import analyze_social_sentiment, calculate_ground
 
 router = APIRouter()
 
+# 11 OFFICIAL CATEGORIES (ENGLISH ONLY)
+OFFICIAL_CATEGORIES = [
+    "Water & Irrigation",
+    "Agriculture", 
+    "Forests & Environment",
+    "Health & Sanitation",
+    "Education",
+    "Infrastructure & Roads",
+    "Law & Order",
+    "Welfare Schemes",
+    "Finance & Taxation",
+    "Urban & Rural Development",
+    "Electricity",
+    "Miscellaneous"
+]
+
+def normalize_category(category: str) -> str:
+    """Normalize any category string to official English category"""
+    if not category:
+        return "Miscellaneous"
+    
+    # Direct match
+    if category in OFFICIAL_CATEGORIES:
+        return category
+    
+    # Case-insensitive match
+    for official in OFFICIAL_CATEGORIES:
+        if category.lower() == official.lower():
+            return official
+    
+    # Keyword mapping for legacy/non-standard categories
+    category_lower = category.lower()
+    
+    mappings = {
+        "water": "Water & Irrigation",
+        "irrigation": "Water & Irrigation",
+        "agriculture": "Agriculture",
+        "farming": "Agriculture",
+        "health": "Health & Sanitation",
+        "sanitation": "Health & Sanitation",
+        "hospital": "Health & Sanitation",
+        "education": "Education",
+        "school": "Education",
+        "road": "Infrastructure & Roads",
+        "infrastructure": "Infrastructure & Roads",
+        "law": "Law & Order",
+        "police": "Law & Order",
+        "welfare": "Welfare Schemes",
+        "pension": "Welfare Schemes",
+        "electricity": "Electricity",
+        "power": "Electricity",
+        "forest": "Forests & Environment",
+        "environment": "Forests & Environment",
+        "tax": "Finance & Taxation",
+        "urban": "Urban & Rural Development",
+        "rural": "Urban & Rural Development",
+        "general": "Miscellaneous",
+        "other": "Miscellaneous",
+    }
+    
+    for key, official in mappings.items():
+        if key in category_lower:
+            return official
+    
+    return "Miscellaneous"
+
 # Global Configuration
 FB_PAGE_ACCESS_TOKEN = os.getenv("FACEBOOK_PAGE_ACCESS_TOKEN")
 FB_PAGE_ID = os.getenv("FACEBOOK_PAGE_ID")
