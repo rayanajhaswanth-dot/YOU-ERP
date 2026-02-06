@@ -54,16 +54,97 @@ const formatDateTime = (isoString) => {
     };
 };
 
-// Normalize category to English
+// Normalize category to English (11 Official Categories)
 const normalizeCategory = (category) => {
     if (!category) return "Miscellaneous";
-    // Map any non-standard categories to standard English
+    
     const normalized = category.trim();
-    if (normalized === "General" || normalized === "Other" || normalized === "general") {
-        return "Miscellaneous";
-    }
-    // Check if it's already a valid category
+    
+    // Direct match with official categories
     if (CATEGORIES.includes(normalized)) return normalized;
+    
+    // Map common variations to official categories
+    const categoryLower = normalized.toLowerCase();
+    
+    const mappings = {
+        // General/Other → Miscellaneous
+        "general": "Miscellaneous",
+        "other": "Miscellaneous",
+        "others": "Miscellaneous",
+        "misc": "Miscellaneous",
+        
+        // Water
+        "water": "Water & Irrigation",
+        "irrigation": "Water & Irrigation",
+        "drinking water": "Water & Irrigation",
+        
+        // Health
+        "health": "Health & Sanitation",
+        "hospital": "Health & Sanitation",
+        "medical": "Health & Sanitation",
+        "sanitation": "Health & Sanitation",
+        
+        // Roads
+        "road": "Infrastructure & Roads",
+        "roads": "Infrastructure & Roads",
+        "infrastructure": "Infrastructure & Roads",
+        "road repair": "Infrastructure & Roads",
+        
+        // Power
+        "power": "Electricity",
+        "current": "Electricity",
+        "electric": "Electricity",
+        
+        // Law
+        "police": "Law & Order",
+        "crime": "Law & Order",
+        "safety": "Law & Order",
+        
+        // Welfare
+        "pension": "Welfare Schemes",
+        "ration": "Welfare Schemes",
+        "scheme": "Welfare Schemes",
+        "welfare": "Welfare Schemes",
+        
+        // Education
+        "school": "Education",
+        "college": "Education",
+        
+        // Agriculture
+        "farming": "Agriculture",
+        "farmer": "Agriculture",
+        "crop": "Agriculture",
+        
+        // Environment
+        "forest": "Forests & Environment",
+        "environment": "Forests & Environment",
+        "pollution": "Forests & Environment",
+        
+        // Finance
+        "tax": "Finance & Taxation",
+        "finance": "Finance & Taxation",
+        
+        // Development
+        "urban": "Urban & Rural Development",
+        "rural": "Urban & Rural Development",
+        "development": "Urban & Rural Development",
+        "municipal": "Urban & Rural Development",
+    };
+    
+    // Check for keyword matches
+    for (const [key, official] of Object.entries(mappings)) {
+        if (categoryLower.includes(key)) {
+            return official;
+        }
+    }
+    
+    // Case-insensitive check against official categories
+    for (const official of CATEGORIES) {
+        if (official.toLowerCase() === categoryLower) {
+            return official;
+        }
+    }
+    
     return normalized;
 };
 
