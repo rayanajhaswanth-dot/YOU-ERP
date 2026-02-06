@@ -737,8 +737,17 @@ const HelpPeople = () => {
               {topCritical.length > 0 ? topCritical.map(issue => {
                 const { date, time } = formatDateTime(issue.created_at);
                 return (
-                  <Card key={issue.id} className="bg-red-950/20 border-red-900/50 border cursor-pointer hover:border-red-700 transition-all" onClick={() => setSelectedGrievance(issue)}>
-                      <CardHeader className="pb-2">
+                  <Card key={issue.id} className="relative bg-red-950/20 border-red-900/50 border cursor-pointer hover:border-red-700 transition-all" onClick={() => setSelectedGrievance(issue)}>
+                      {/* Delete Button */}
+                      <button
+                        onClick={(e) => handleDeleteGrievance(issue.id, e)}
+                        className="absolute top-2 right-2 p-1 text-red-400 hover:text-red-300 hover:bg-red-500/20 rounded transition-colors z-10"
+                        title="Delete Grievance"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                      
+                      <CardHeader className="pb-2 pr-8">
                           <div className="flex justify-between">
                             <Badge className="bg-red-600 text-white">CRITICAL</Badge>
                             <span className="text-xs text-red-300 font-mono">#{issue.id?.slice(0,6)}</span>
