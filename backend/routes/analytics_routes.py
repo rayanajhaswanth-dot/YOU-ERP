@@ -359,3 +359,60 @@ async def get_campaign_performance(user: TokenData = Depends(get_current_user)):
         },
         "posts": all_posts[:20]
     }
+
+
+@router.get("/grievance-stats")
+async def get_grievance_stats(user: TokenData = Depends(get_current_user)):
+    """
+    Get grievance statistics with NORMALIZED English categories.
+    This endpoint ensures graphs display only the 11 official categories.
+    """
+    user_role = user.role.lower() if user.role else "citizen"
+    if user_role not in ["leader", "osd", "politician"]:
+        raise HTTPException(status_code=403, detail="Access denied.")
+    
+    supabase = get_supabase()
+    
+    try:
+        grievances_result = supabase.table('grievances').select('*').eq('politician_id', user.politician_id).execute()
+        grievances = grievances_result.data or []
+    except Exception as e:
+        print(f"❌ [Analytics] Grievance fetch error: {e}")
+        grievances = []
+    
+    # Aggregate by NORMALIZED English category
+    category_counts = {cat: 0 for cat in OFFICIAL_CATEGORIES}
+    status_counts = {"PENDING": 0, "IN_PROGRESS": 0, "RESOLVED": 0, "ASSIGNED": 0}
+    priority_counts = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0}
+    
+    for g in grievances:
+        # Normalize category to official English
+        raw_category = g.get('category') or g.get('issue_type') or 'Miscellaneous'
+        normalized = normalize_category(raw_category)
+        category_counts[normalized] = category_counts.get(normalized, 0) + 1
+        
+        # Count by status
+        status = (g.get('status') or 'PENDING').upper()
+        if status in status_counts:
+            status_counts[status] += 1
+        
+        # Count by priority
+        priority = (g.get('priority_level') or 'LOW').upper()
+        if priority in priority_counts:
+            priority_counts[priority] += 1
+    
+    # Format for charts (sorted by count)
+    category_chart_data = [
+        {"name": cat, "count": count}
+        for cat, count in sorted(category_counts.items(), key=lambda x: -x[1])
+        if count > 0
+    ]
+    
+    return {
+        "total": len(grievances),
+        "by_category": category_chart_data,
+        "by_status": status_counts,
+        "by_priority": priority_counts,
+        "categories": OFFICIAL_CATEGORIES
+    }
+
