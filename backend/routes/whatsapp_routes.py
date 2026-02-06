@@ -432,6 +432,7 @@ async def get_osd_response(response_type: str, language: str) -> str:
     """Get OSD-style response in user's language"""
     responses = {
         "chat_default": "I'm here to assist you. How may I help you today?",
+        "query_default": "I'd be happy to help with information. Could you please specify which scheme or process you'd like to know about?",
         "feedback_thanks": "Thank you for your valuable feedback. We are committed to serving you better.",
         "voice_error": "I received your voice message but could not process it. Please try again or type your message.",
         "media_error": "I received your document but could not extract the information. Please describe your issue in text.",
