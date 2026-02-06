@@ -331,8 +331,6 @@ async def resolve_grievance(
         "status": "RESOLVED",
         "notification_sent": notification_sent
     }
-        "notification_sent": notification_sent
-    }
 
 
 class FeedbackRequest(BaseModel):
