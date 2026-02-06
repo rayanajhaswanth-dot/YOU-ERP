@@ -60,6 +60,32 @@ async def create_grievance(
     result = supabase.table('grievances').insert(grievance_data).execute()
     return {"message": "Grievance created successfully", "id": grievance_id}
 
+
+@router.delete("/{grievance_id}")
+async def delete_grievance(
+    grievance_id: str,
+    current_user: TokenData = Depends(get_current_user)
+):
+    """
+    Delete a grievance permanently.
+    Used by OSD/PA to remove invalid or accidental grievances.
+    """
+    if not current_user.politician_id:
+        raise HTTPException(status_code=403, detail="User not associated with a politician")
+    
+    supabase = get_supabase()
+    
+    # Verify the grievance belongs to this politician
+    existing = supabase.table('grievances').select('id').eq('id', grievance_id).eq('politician_id', current_user.politician_id).execute()
+    if not existing.data:
+        raise HTTPException(status_code=404, detail="Grievance not found")
+    
+    # Delete the grievance
+    supabase.table('grievances').delete().eq('id', grievance_id).execute()
+    
+    return {"message": "Grievance deleted successfully", "id": grievance_id}
+
+
 @router.get("/")
 async def get_grievances(
     status: Optional[str] = None,
