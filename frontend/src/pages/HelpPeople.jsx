@@ -435,7 +435,7 @@ const HelpPeople = () => {
     finally { setLoading(false); }
   };
 
-  const handleMediaSelect = (e) => {
+  const handleMediaSelect = async (e) => {
     const file = e.target.files[0];
     if (file) {
       if (!file.type.startsWith('image/') && file.type !== 'application/pdf') {
@@ -444,6 +444,45 @@ const HelpPeople = () => {
       }
       setMediaFile(file);
       toast.success(`Attached: ${file.name}`);
+      
+      // If it's a PDF or image, extract info using AI
+      if (file.type === 'application/pdf' || file.type.startsWith('image/')) {
+        toast.info("Processing document with AI...");
+        try {
+          const token = localStorage.getItem('token');
+          const extractFormData = new FormData();
+          extractFormData.append('file', file);
+          
+          const res = await fetch(`${BACKEND_URL}/api/ai/extract_from_media`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` },
+            body: extractFormData
+          });
+          
+          if (res.ok) {
+            const result = await res.json();
+            if (result.success && result.data) {
+              const extracted = result.data;
+              
+              // Auto-fill form with extracted data
+              setFormData(prev => ({
+                ...prev,
+                citizen_name: extracted.name || prev.citizen_name,
+                citizen_phone: extracted.contact || prev.citizen_phone,
+                location: extracted.area || prev.location,
+                category: extracted.category || prev.category,
+                description: extracted.description || prev.description,
+                priority_level: getCategoryPriority(extracted.category || prev.category)
+              }));
+              
+              toast.success("Document processed! Form auto-filled with extracted data.");
+            }
+          }
+        } catch (err) {
+          console.error("AI extraction error:", err);
+          toast.info("Could not auto-extract info. Please fill the form manually.");
+        }
+      }
     }
   };
 
