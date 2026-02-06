@@ -524,7 +524,24 @@ const HelpPeople = () => {
     // Priority filter
     const priorityMatch = filterPriority === "All" || g.priority_level === filterPriority;
     
-    return textMatch && categoryMatch && priorityMatch;
+    // Geo-type filter (based on area naming patterns)
+    let geoMatch = true;
+    if (filterGeoType !== "All Areas") {
+      const area = (g.village || g.location || '').toLowerCase();
+      const geoPatterns = {
+        "Mandal": ["mandal", "mandalam", "మండలం", "मंडल"],
+        "Village": ["village", "గ్రామం", "grama", "gram", "गांव", "gaon"],
+        "Panchayat": ["panchayat", "పంచాయతీ", "पंचायत"],
+        "Town": ["town", "పట్టణం", "नगर", "nagar"],
+        "Ward": ["ward", "వార్డు", "वार्ड"],
+        "Division": ["division", "విభాగం", "डिवीजन"],
+        "City": ["city", "నగరం", "शहर", "shahar"]
+      };
+      const patterns = geoPatterns[filterGeoType] || [];
+      geoMatch = patterns.some(p => area.includes(p));
+    }
+    
+    return textMatch && categoryMatch && priorityMatch && geoMatch;
   });
 
   // Sorted List
@@ -691,6 +708,13 @@ const HelpPeople = () => {
             <SelectContent className="bg-slate-900 border-slate-800 text-white">
               <SelectItem value="All">All Categories</SelectItem>
               {CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          
+          <Select onValueChange={setFilterGeoType} defaultValue="All Areas">
+            <SelectTrigger className="w-[140px] bg-slate-900 border-slate-700 text-white text-sm"><SelectValue placeholder="Geo Type" /></SelectTrigger>
+            <SelectContent className="bg-slate-900 border-slate-800 text-white">
+              {GEO_TYPES.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}
             </SelectContent>
           </Select>
           
