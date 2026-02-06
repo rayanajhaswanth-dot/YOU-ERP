@@ -347,19 +347,26 @@ async def extract_grievance_from_unstructured_text(text: str, lang: str, phone: 
         chat = LlmChat(
             api_key=EMERGENT_LLM_KEY,
             session_id=f"extract-{uuid.uuid4()}",
-            system_message="""You are an AI assistant that extracts grievance information from unstructured text.
+            system_message="""You are an AI assistant that extracts grievance information from unstructured text in any Indian language.
 Your job is to identify and extract:
-1. Person's name
-2. Contact number (if mentioned)
-3. Area/Location (Village, Mandal, Ward, Town, City, Division, Panchayat)
-4. Issue Category (from: Water & Irrigation, Agriculture, Health & Sanitation, Education, Infrastructure & Roads, Law & Order, Welfare Schemes, Electricity, Miscellaneous)
-5. Issue Description
+1. Person's name (if explicitly mentioned, not inferred)
+2. Contact number (if mentioned, must be 10 digits)
+3. Area/Location - Look for: Village names, Mandal names, Ward numbers, Town names, City names, Division names, Panchayat names
+4. Issue Category - Map to one of: Water & Irrigation, Agriculture, Health & Sanitation, Education, Infrastructure & Roads, Law & Order, Welfare Schemes, Electricity, Miscellaneous
+5. Issue Description - Clean up and summarize the actual problem
 
-Even if information is mixed, unclear, or fragmented, extract what you can find.
-ALWAYS return the category in ENGLISH regardless of input language.
+IMPORTANT RULES:
+- ALWAYS return the category in ENGLISH regardless of input language
+- If text mentions specific governance keywords, map to correct category:
+  * నీరు/पानी/water/borewell/tank → Water & Irrigation
+  * రోడ్డు/सड़क/road/pothole/bridge → Infrastructure & Roads
+  * ఆసుపత్రి/अस्पताल/hospital/doctor → Health & Sanitation
+  * విద్యుత్/बिजली/current/power cut → Electricity
+  * పింఛను/पेंशन/ration/housing scheme → Welfare Schemes
+- Only mark has_all_required=true if you have: area AND description (name can be profile name)
 
 Return ONLY valid JSON (no markdown):
-{"name": "extracted name or null", "area": "extracted area or null", "category": "English category name", "description": "cleaned description", "has_all_required": true/false}"""
+{"name": "extracted name or null", "area": "extracted area or null", "category": "English category name", "description": "cleaned description", "has_all_required": true/false, "missing_fields": ["list of missing required fields"]}"""
         ).with_model("gemini", "gemini-2.0-flash")
         
         prompt = f"""Extract grievance information from this message:
@@ -367,9 +374,10 @@ Return ONLY valid JSON (no markdown):
 MESSAGE: "{text}"
 SENDER NAME (from WhatsApp): {name}
 SENDER PHONE: {phone}
+MESSAGE LANGUAGE: {lang}
 
-Extract and organize the information. If the text is in Telugu/Hindi, still return category in English.
-If name is not mentioned, use the sender name from WhatsApp.
+Extract and organize the information. Return category in English always.
+If area is not explicitly mentioned, set area to null.
 
 Return ONLY valid JSON."""
         
@@ -382,7 +390,8 @@ Return ONLY valid JSON."""
             "area": extracted.get("area"),
             "category": extracted.get("category", "Miscellaneous"),
             "description": extracted.get("description", text),
-            "has_all_required": extracted.get("has_all_required", False)
+            "has_all_required": extracted.get("has_all_required", False),
+            "missing_fields": extracted.get("missing_fields", [])
         }
         
     except Exception as e:
@@ -392,7 +401,8 @@ Return ONLY valid JSON."""
             "area": None,
             "category": "Miscellaneous",
             "description": text,
-            "has_all_required": False
+            "has_all_required": False,
+            "missing_fields": ["area"]
         }
 
 
