@@ -308,44 +308,101 @@ Return JSON only (no markdown):
 # ==============================================================================
 
 async def transcribe_audio(audio_binary: bytes, content_type: str = "audio/ogg") -> str:
-    """Transcribe audio using Whisper via Emergent wrapper"""
+    """
+    Transcribe audio using Whisper via Emergent wrapper.
+    Handles OGG/OPUS to MP3 conversion for WhatsApp voice notes.
+    """
     try:
+        if not audio_binary or len(audio_binary) < 100:
+            print(f"❌ Audio data too small or empty: {len(audio_binary) if audio_binary else 0} bytes")
+            return ""
+        
         temp_id = str(uuid.uuid4())
-        original_ext = 'ogg' if 'ogg' in content_type else 'mp3'
+        
+        # Determine original format
+        original_ext = 'ogg'
+        if 'mp3' in content_type or 'mpeg' in content_type:
+            original_ext = 'mp3'
+        elif 'wav' in content_type:
+            original_ext = 'wav'
+        elif 'amr' in content_type:
+            original_ext = 'amr'
+        elif 'opus' in content_type:
+            original_ext = 'opus'
+        
         original_path = f"/tmp/audio_{temp_id}.{original_ext}"
         
+        # Save audio to temp file
         with open(original_path, 'wb') as f:
             f.write(audio_binary)
         
-        # Convert to MP3 if needed
-        transcribe_path = original_path
-        if original_ext == 'ogg':
-            mp3_path = f"/tmp/audio_{temp_id}.mp3"
-            result = subprocess.run(
-                ['ffmpeg', '-i', original_path, '-acodec', 'libmp3lame', '-ar', '16000', '-ac', '1', '-y', mp3_path],
-                capture_output=True, text=True, timeout=30
-            )
-            if result.returncode == 0:
-                transcribe_path = mp3_path
+        file_size = os.path.getsize(original_path)
+        print(f"🎤 Audio saved: {original_path}, size: {file_size} bytes, type: {content_type}")
         
-        transcriber = OpenAISpeechToText(api_key=EMERGENT_LLM_KEY)
-        with open(transcribe_path, 'rb') as audio_file:
-            response = await transcriber.transcribe(file=audio_file, model="whisper-1", response_format="json")
-        
-        transcript = response.text if hasattr(response, 'text') else str(response)
-        
-        # Cleanup
-        try:
+        if file_size < 100:
+            print(f"❌ Audio file too small after save: {file_size} bytes")
             os.remove(original_path)
-            if transcribe_path != original_path:
-                os.remove(transcribe_path)
-        except:
-            pass
+            return ""
         
-        return transcript.strip()
+        # Convert to MP3 if needed (Whisper doesn't support OGG/OPUS well)
+        transcribe_path = original_path
+        if original_ext in ['ogg', 'opus', 'amr']:
+            mp3_path = f"/tmp/audio_{temp_id}.mp3"
+            try:
+                print(f"🔄 Converting {original_ext} to MP3...")
+                result = subprocess.run(
+                    ['ffmpeg', '-i', original_path, '-acodec', 'libmp3lame', '-ar', '16000', '-ac', '1', '-b:a', '64k', '-y', mp3_path],
+                    capture_output=True, text=True, timeout=60
+                )
+                
+                if result.returncode == 0 and os.path.exists(mp3_path) and os.path.getsize(mp3_path) > 100:
+                    transcribe_path = mp3_path
+                    print(f"✅ Converted to MP3: {mp3_path}, size: {os.path.getsize(mp3_path)} bytes")
+                else:
+                    print(f"⚠️ FFmpeg conversion failed or output too small. stderr: {result.stderr[:200] if result.stderr else 'none'}")
+                    # Try with original file anyway
+            except subprocess.TimeoutExpired:
+                print(f"⚠️ FFmpeg conversion timed out")
+            except Exception as conv_error:
+                print(f"⚠️ FFmpeg error: {conv_error}")
+        
+        # Transcribe using Emergent Wrapper
+        print(f"🎯 Transcribing: {transcribe_path}")
+        transcriber = OpenAISpeechToText(api_key=EMERGENT_LLM_KEY)
+        
+        with open(transcribe_path, 'rb') as audio_file:
+            response = await transcriber.transcribe(
+                file=audio_file,
+                model="whisper-1",
+                response_format="json"
+            )
+        
+        # Extract text from response
+        if hasattr(response, 'text'):
+            transcript = response.text
+        elif isinstance(response, dict):
+            transcript = response.get('text', str(response))
+        else:
+            transcript = str(response)
+        
+        transcript = transcript.strip()
+        print(f"📝 Transcription result: '{transcript[:100]}...' " if len(transcript) > 100 else f"📝 Transcription result: '{transcript}'")
+        
+        # Cleanup temp files
+        try:
+            if os.path.exists(original_path):
+                os.remove(original_path)
+            if transcribe_path != original_path and os.path.exists(transcribe_path):
+                os.remove(transcribe_path)
+        except Exception as cleanup_error:
+            print(f"⚠️ Cleanup error: {cleanup_error}")
+        
+        return transcript
         
     except Exception as e:
-        print(f"❌ Transcription error: {e}")
+        print(f"❌ Transcription Critical Error: {e}")
+        import traceback
+        traceback.print_exc()
         return ""
 
 
