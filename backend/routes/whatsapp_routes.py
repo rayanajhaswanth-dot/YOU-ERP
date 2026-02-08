@@ -533,20 +533,23 @@ async def whatsapp_status():
     """Check WhatsApp bot status"""
     return {
         "status": "active",
-        "version": "3.3 - OSD Persona with Strict Language Control",
+        "version": "3.4 - Iron Dome Language Control",
         "features": [
+            "IRON DOME System Prompt - Eliminates Token Overlap hallucinations",
+            "Token Disambiguation: Tu/Mera/De/Se/Me → HINDI (not French/Spanish)",
+            "JUGAAD Safety Net - Catches foreign language in final response",
             "Intent Classification (CHAT/GRIEVANCE/STATUS/FEEDBACK/GENERAL_QUERY)",
-            "STRICT Language Mirroring - NO Foreign Languages (French/Spanish blocked)",
-            "Hinglish Support - Hindi in English script mirrored exactly",
-            "Medical Domain Knowledge - 108 Ambulance, Aarogyasri, CMO, PHC",
-            "Government Schemes Knowledge - Rythu Bandhu, PM Kisan, PMAY, Asara",
-            "Native Language Resolution - Notifications in user's language",
+            "Hinglish/Tenglish Support - Mirror exact user script",
+            "Medical Domain: 108 Ambulance, Aarogyasri, PHC, CMO, District Collector",
+            "Government Schemes: Rythu Bandhu, PM Kisan, PMAY, Asara Pension",
             "PDF/Image Deep OCR with English normalization",
-            "Voice Transcription with FFmpeg + Whisper (OGG/OPUS support)",
-            "Category Sanitization - Hindi words (Sadak/Pani) → English",
+            "Voice Transcription: FFmpeg OGG→MP3 + Whisper",
+            "Category Sanitization: Sadak/Pani → Infrastructure/Water",
+            "Native Language Resolution Notifications",
             "Delete/Close buttons on grievance cards"
         ],
         "intents": ["CHAT", "GRIEVANCE", "STATUS", "FEEDBACK", "GENERAL_QUERY"],
-        "supported_languages": ["English", "Hindi (Devanagari)", "Hinglish (Roman)", "Telugu", "Tamil", "Kannada", "Malayalam", "Bengali"],
+        "supported_languages": ["English", "Hinglish (Hindi-Roman)", "Tenglish (Telugu-Roman)", "Hindi (Devanagari)", "Telugu", "Tamil", "Kannada", "Malayalam", "Bengali"],
+        "forbidden_languages": ["French", "Spanish", "German", "Portuguese"],
         "categories": OFFICIAL_CATEGORIES
     }
