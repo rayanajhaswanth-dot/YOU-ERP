@@ -533,19 +533,20 @@ async def whatsapp_status():
     """Check WhatsApp bot status"""
     return {
         "status": "active",
-        "version": "3.1 - OSD Persona with General Knowledge",
+        "version": "3.3 - OSD Persona with Strict Language Control",
         "features": [
             "Intent Classification (CHAT/GRIEVANCE/STATUS/FEEDBACK/GENERAL_QUERY)",
-            "OSD Persona - Professional PA/OSD style responses",
-            "General Knowledge - Answers scheme/governance questions without registering grievance",
+            "STRICT Language Mirroring - NO Foreign Languages (French/Spanish blocked)",
+            "Hinglish Support - Hindi in English script mirrored exactly",
+            "Medical Domain Knowledge - 108 Ambulance, Aarogyasri, CMO, PHC",
+            "Government Schemes Knowledge - Rythu Bandhu, PM Kisan, PMAY, Asara",
             "Native Language Resolution - Notifications in user's language",
-            "Smart Chat - 'Thank you' is not registered as grievance",
-            "Feedback Loop - Ratings stored, thank you response given",
-            "PDF/Image AI Extraction with GPT-4o (English normalization)",
-            "Voice Transcription with Whisper",
-            "English-only DB storage with language context",
-            "Multilingual Support (Telugu, Hindi, Tamil, Kannada, Malayalam, Bengali)"
+            "PDF/Image Deep OCR with English normalization",
+            "Voice Transcription with FFmpeg + Whisper (OGG/OPUS support)",
+            "Category Sanitization - Hindi words (Sadak/Pani) → English",
+            "Delete/Close buttons on grievance cards"
         ],
         "intents": ["CHAT", "GRIEVANCE", "STATUS", "FEEDBACK", "GENERAL_QUERY"],
+        "supported_languages": ["English", "Hindi (Devanagari)", "Hinglish (Roman)", "Telugu", "Tamil", "Kannada", "Malayalam", "Bengali"],
         "categories": OFFICIAL_CATEGORIES
     }
