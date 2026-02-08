@@ -776,7 +776,23 @@ const HelpPeople = () => {
               </div>
           </CollapsibleTrigger>
           <CollapsibleContent>
-              <div className="p-6 border-t border-slate-800 space-y-4 bg-slate-950">
+              <div className="relative p-6 border-t border-slate-800 space-y-4 bg-slate-950">
+                  {/* Cancel/Close Button */}
+                  <button
+                    onClick={() => {
+                      setIsAddOpen(false);
+                      setFormData({
+                        citizen_name: '', citizen_phone: '', location: '',
+                        category: 'Miscellaneous', description: '', priority_level: 'LOW'
+                      });
+                      setMediaFile(null);
+                    }}
+                    className="absolute top-3 right-3 p-2 text-slate-400 hover:text-red-500 hover:bg-red-500/10 rounded-full transition-colors"
+                    title="Cancel & Close"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                  
                   {/* Standardized Format Fields */}
                   <p className="text-xs text-orange-500 uppercase font-bold">Grievance Registration (Standardized Format)</p>
                   
