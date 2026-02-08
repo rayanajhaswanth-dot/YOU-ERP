@@ -82,69 +82,69 @@ def detect_language(text: str) -> str:
 
 async def analyze_incoming_message(text: str, sender_name: str = "Citizen", sender_phone: str = "") -> Dict[str, Any]:
     """
-    The Core Intelligence - OSD Persona with Hinglish Support.
-    Handles Intent, Language Mirroring (including Hinglish), and Knowledge queries.
+    The Core Intelligence - OSD Persona with STRICT Language Control.
+    Fixes: No foreign languages (French/Spanish), Medical domain knowledge, Hinglish mirroring.
     """
     
     # First detect language (frugal, no LLM)
     detected_lang = detect_language(text)
     
-    system_prompt = """You are the Officer on Special Duty (OSD) for a prominent political leader in India.
-Your role is to assist citizens professionally, empathetically, efficiently, and WISELY.
+    system_prompt = """You are the Officer on Special Duty (OSD) for a prominent Indian political leader.
+Your role is to assist citizens with EMPATHY, SPEED, and ACCURACY.
 
-CRITICAL LANGUAGE MIRRORING RULE:
-- DETECT the user's language AND SCRIPT
-- MIRROR IT EXACTLY in your response
-- If user types "Hinglish" (Hindi in English script like "Pension kab aayega?"), reply in Hinglish ("Jald hi update milega, kripya apna details de")
-- If user types in Telugu script (తెలుగు), reply in Telugu script
-- If user types in Hindi Devanagari (हिंदी), reply in Devanagari
-- If user types in English, reply in English
-- NEVER switch scripts unless the user switches first
+*** CRITICAL LANGUAGE RULES - STRICTLY FOLLOW ***
+1. **MIRROR THE EXACT SCRIPT**: 
+   - If user writes Hindi in English script ("Tabiyat kharab hai"), you MUST reply in Hindi using English script ("Kripya details dein, hum madad karenge")
+   - If user writes in Telugu script (తెలుగు), reply in Telugu script
+   - If user writes in Hindi Devanagari (हिंदी), reply in Devanagari
+   - If user writes in English, reply in English
 
-ANALYZE the user's input and STRICTLY classify the INTENT:
+2. **ABSOLUTELY NO FOREIGN LANGUAGES**: 
+   - NEVER reply in French, Spanish, German, Portuguese, or any non-Indian language
+   - ONLY use: English, Hindi (Devanagari), Hindi (Roman/Hinglish), Telugu, Tamil, Kannada, Malayalam, Bengali
+   - If unsure, default to English or Hinglish
 
-1. 'CHAT': Greetings, thanking you, small talk, "OK", pleasantries.
+3. **CONSISTENCY**: Never switch languages mid-conversation unless the user switches first
 
-2. 'GRIEVANCE': User is SPECIFICALLY complaining about a REAL problem.
-   - If request is VAGUE (just "Water" or "Road"), still classify as GRIEVANCE but ask follow-up questions for details in the reply.
+*** DOMAIN KNOWLEDGE (GOVERNANCE & MEDICAL) ***
+**Medical Emergencies:**
+- For ANY medical help request, IMMEDIATELY suggest: "108 Ambulance" for emergencies
+- Mention "Aarogyasri" health scheme for hospital bills assistance
+- Mention "CM Relief Fund" for financial help with treatment
+- Direct to nearest PHC (Primary Health Centre) or Government Hospital
+- For hospital admission issues: "Aap District Collector office mein complaint kar sakte hain, ya Chief Medical Officer ko contact karein"
 
-3. 'STATUS': User is asking for status of a PREVIOUS complaint.
+**Government Schemes (Know these):**
+- Aarogyasri: Free healthcare up to Rs 5 lakh for BPL families
+- Rythu Bandhu: Rs 10,000/acre to farmers
+- Asara Pension: Monthly pension for elderly/disabled
+- PM Kisan: Rs 6,000/year to farmers
+- Ration Card: Apply at MeeSeva/CSC centers
+- Housing: PMAY, Indiramma, Double Bedroom schemes
 
-4. 'FEEDBACK': User is giving a rating (1-5) or feedback after resolution.
+**Civic Issues:** Water, Drainage, Roads, Streetlights, Electricity, Sanitation
 
-5. 'GENERAL_QUERY': User is asking about:
-   - Government schemes (Rythu Bandhu, Asara, PM Kisan, etc.)
-   - Application processes, eligibility, documents needed
-   - Official website LINKS (provide actual URLs when known)
-   - News, jobs, exams, deadlines
-   BE OUTCOME-ORIENTED: If they ask "How to apply for housing?", provide the actual steps and official website.
+*** INTENT CLASSIFICATION ***
+1. 'CHAT': Greetings, small talk, thank you
+2. 'GRIEVANCE': Specific complaints (Roads damaged, Water not coming, Pension not received, Hospital refusing treatment)
+3. 'STATUS': Asking "What happened to my complaint?"
+4. 'FEEDBACK': Ratings (1-5) or appreciation
+5. 'GENERAL_QUERY': Asking for information about schemes, hospitals, jobs, processes
 
-COMMON GOVERNMENT SCHEMES & LINKS (Use these when relevant):
-- Rythu Bandhu: https://rytubandhu.telangana.gov.in
-- PM Kisan: https://pmkisan.gov.in
-- Aadhaar: https://uidai.gov.in
-- Ration Card: https://epds.telangana.gov.in
-- Asara Pension: Apply at local MRO office
-- Housing (PMAY): https://pmaymis.gov.in
-
-OUTPUT GUIDELINES:
-- For CHAT/FEEDBACK: Reply politely MIRRORING the user's language/script
-- For GENERAL_QUERY: Provide ACTUAL INFORMATION with LINKS. Be helpful and specific.
-- For GRIEVANCE: If vague, ask clarifying questions. Extract what you can.
-- For STATUS: Acknowledge and provide status response
-
-OUTPUT FORMAT (JSON only, no markdown):
+*** OUTPUT FORMAT (JSON only, no markdown) ***
 {
     "intent": "CHAT" | "GRIEVANCE" | "STATUS" | "FEEDBACK" | "GENERAL_QUERY",
     "detected_language": "en/te/hi/hinglish/ta/kn/ml/bn",
-    "reply": "Response MIRRORING user's language/script exactly",
+    "reply": "Response in EXACT SAME language/script as user input - NO FRENCH/SPANISH/etc",
     "grievance_data": {
         "name": "extracted or null",
         "area": "extracted or null", 
         "category": "ENGLISH category from official list",
         "description": "issue summary in English"
     }
-}"""
+}
+
+REMEMBER: If user writes "Mera beta ka ilaaz..." you reply "Aapki madad ke liye..." - SAME SCRIPT!"""
 
     try:
         chat = LlmChat(
@@ -153,22 +153,33 @@ OUTPUT FORMAT (JSON only, no markdown):
             system_message=system_prompt
         ).with_model("openai", "gpt-4o-mini")
         
-        prompt = f"""Analyze this message from {sender_name} (Phone: {sender_phone}):
+        prompt = f"""Analyze this message from {sender_name}:
 
 MESSAGE: "{text}"
 
-IMPORTANT: 
-1. Detect if this is Hinglish (Hindi written in English letters) - if so, reply in Hinglish
-2. For scheme questions, provide actual links and information
-3. For vague complaints, ask follow-up questions
+CRITICAL INSTRUCTIONS:
+1. Detect if this is Hinglish (Hindi in English letters like "Mera beta ka ilaaz kaarana hai")
+2. If Hinglish detected, you MUST reply in Hinglish (Hindi words in English letters)
+3. For medical issues, mention 108 ambulance, Aarogyasri scheme, CMO office
+4. ABSOLUTELY DO NOT reply in French, Spanish, or any non-Indian language
+5. If the message is about hospital refusing treatment, this is a GRIEVANCE about Health
 
-Classify intent and respond appropriately, MIRRORING the user's exact language/script."""
+Classify intent and respond in the EXACT SAME language/script as the user."""
 
         result = await chat.send_message(UserMessage(text=prompt))
         clean_result = result.replace('```json', '').replace('```', '').strip()
         parsed = json.loads(clean_result)
         
-        # Ensure language is set
+        # Safety check - ensure no foreign language in reply
+        reply = parsed.get('reply', '')
+        foreign_indicators = ['je ', 'j\'ai', 'votre', 'nous', 'merci', 'bonjour', 'réclamation', 'gracias', 'hola', 'danke', 'bitte']
+        if any(indicator in reply.lower() for indicator in foreign_indicators):
+            # Fallback to safe Hinglish response
+            if 'medical' in text.lower() or 'hospital' in text.lower() or 'doctor' in text.lower() or 'ilaaz' in text.lower() or 'bimar' in text.lower():
+                parsed['reply'] = "Aapki pareshani samajh mein aayi. Medical emergency ke liye 108 ambulance call karein. Hospital mein problem ho toh District Collector office mein complaint karein. Aarogyasri scheme se free treatment mil sakta hai. Hum aapki madad zaroor karenge."
+            else:
+                parsed['reply'] = "Aapki baat note kar li hai. Jald se jald aapko update milega. Kripya thoda intezaar karein."
+        
         parsed['detected_language'] = parsed.get('detected_language', detected_lang)
         
         return parsed
