@@ -182,13 +182,16 @@ async def process_osd_conversation(phone: str, message: str, name: str, media_ur
                     stored_url = None
                 
                 if is_audio:
-                    # Transcribe voice message
+                    # Transcribe voice message with detailed logging
+                    print(f"🎤 Processing voice message: {len(media_obj['buffer'])} bytes, type: {media_content_type}")
                     transcript = await transcribe_audio(media_obj['buffer'], media_content_type)
-                    if transcript:
+                    if transcript and len(transcript.strip()) > 0:
                         message = transcript
-                        print(f"🎤 Transcribed: {transcript[:100]}...")
+                        print(f"✅ Voice transcribed successfully: {transcript[:100]}...")
                     else:
-                        return await get_osd_response("voice_error", detect_language(message) or 'en')
+                        print(f"❌ Voice transcription returned empty result")
+                        # Return error in user's likely language (default to Hinglish for Indian users)
+                        return "Maaf kijiye, aapka voice message samajh nahi aaya. Kripya dobara bhejein ya text mein likhein."
                 
                 elif is_image or is_pdf:
                     # Extract grievance from document
