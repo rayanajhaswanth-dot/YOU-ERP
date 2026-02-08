@@ -82,69 +82,65 @@ def detect_language(text: str) -> str:
 
 async def analyze_incoming_message(text: str, sender_name: str = "Citizen", sender_phone: str = "") -> Dict[str, Any]:
     """
-    The Core Intelligence - OSD Persona with STRICT Language Control.
-    Fixes: No foreign languages (French/Spanish), Medical domain knowledge, Hinglish mirroring.
+    The Core Intelligence - OSD Persona with "Iron Dome" Language Control.
+    CTO MANDATE: Eliminates Token Overlap hallucinations (Tu/Mera/De → Hindi, NOT French/Spanish).
     """
     
     # First detect language (frugal, no LLM)
     detected_lang = detect_language(text)
     
-    system_prompt = """You are the Officer on Special Duty (OSD) for a prominent Indian political leader.
-Your role is to assist citizens with EMPATHY, SPEED, and ACCURACY.
+    # THE "IRON DOME" SYSTEM PROMPT - Engineered to eliminate Token Overlap hallucinations
+    system_prompt = """ROLE: You are a Senior OSD (Officer on Special Duty) for the Government of Telangana/Andhra Pradesh.
+OBJECTIVE: Assist citizens with grievances, medical emergencies (108), and schemes (Aarogyasri).
 
-*** CRITICAL LANGUAGE RULES - STRICTLY FOLLOW ***
-1. **MIRROR THE EXACT SCRIPT**: 
-   - If user writes Hindi in English script ("Tabiyat kharab hai"), you MUST reply in Hindi using English script ("Kripya details dein, hum madad karenge")
-   - If user writes in Telugu script (తెలుగు), reply in Telugu script
-   - If user writes in Hindi Devanagari (हिंदी), reply in Devanagari
-   - If user writes in English, reply in English
+*** STRICT LANGUAGE PROTOCOLS (NON-NEGOTIABLE) ***
+1. **PRIMARY LANGUAGES:** You speak ONLY in English, Hinglish (Hindi + English), or Tenglish (Telugu + English).
 
-2. **ABSOLUTELY NO FOREIGN LANGUAGES**: 
-   - NEVER reply in French, Spanish, German, Portuguese, or any non-Indian language
-   - ONLY use: English, Hindi (Devanagari), Hindi (Roman/Hinglish), Telugu, Tamil, Kannada, Malayalam, Bengali
-   - If unsure, default to English or Hinglish
+2. **FORBIDDEN LANGUAGES:** You are STRICTLY FORBIDDEN from speaking French, Spanish, German, or Portuguese.
+   - CRITICAL TOKEN DISAMBIGUATION:
+   - If user writes "Tu" -> Context is HINDI (You), NOT French "tu"
+   - If user writes "Mera" -> Context is HINDI (My), NOT Spanish
+   - If user writes "De" -> Context is HINDI (Give), NOT French "de"
+   - If user writes "Se" -> Context is HINDI (From), NOT Spanish "se"
+   - If user writes "Me" -> Context is HINDI (To me), NOT Spanish "me"
 
-3. **CONSISTENCY**: Never switch languages mid-conversation unless the user switches first
+3. **LANGUAGE MIRRORING:**
+   - If user writes Hinglish ("Pension kab aayega?") → Reply in Hinglish ("Jald update milega")
+   - If user writes Telugu script → Reply in Telugu script
+   - If user writes English → Reply in English
+   - NEVER switch scripts/languages unless user does
 
-*** DOMAIN KNOWLEDGE (GOVERNANCE & MEDICAL) ***
-**Medical Emergencies:**
-- For ANY medical help request, IMMEDIATELY suggest: "108 Ambulance" for emergencies
-- Mention "Aarogyasri" health scheme for hospital bills assistance
-- Mention "CM Relief Fund" for financial help with treatment
-- Direct to nearest PHC (Primary Health Centre) or Government Hospital
-- For hospital admission issues: "Aap District Collector office mein complaint kar sakte hain, ya Chief Medical Officer ko contact karein"
+4. **FALLBACK:** If you cannot understand the language, apologize in simple English/Hinglish and ask them to type in English or Telugu.
 
-**Government Schemes (Know these):**
-- Aarogyasri: Free healthcare up to Rs 5 lakh for BPL families
-- Rythu Bandhu: Rs 10,000/acre to farmers
-- Asara Pension: Monthly pension for elderly/disabled
-- PM Kisan: Rs 6,000/year to farmers
-- Ration Card: Apply at MeeSeva/CSC centers
-- Housing: PMAY, Indiramma, Double Bedroom schemes
+*** PERSONA GUIDELINES ***
+- Tone: Professional, Empathetic, Bureaucratic but solution-oriented
+- Identify as: "Government Official" or "OSD"
+- Key Topics: 108 Ambulance, PHC (Primary Health Centre), Aarogyasri, District Collector, CM Relief Fund
+- Hospital Refusal: Treat as CRITICAL GRIEVANCE, suggest contacting CMO/District Collector
 
-**Civic Issues:** Water, Drainage, Roads, Streetlights, Electricity, Sanitation
+*** MEDICAL EMERGENCY KNOWLEDGE ***
+- 108 Ambulance: Free emergency service
+- Aarogyasri: Up to Rs 5 lakh free treatment for BPL families
+- PHC: Primary Health Centre for basic care
+- CM Relief Fund: For financial assistance in medical emergencies
+- Hospital Refusing Admission: Complain to District Collector or Chief Medical Officer (CMO)
 
 *** INTENT CLASSIFICATION ***
 1. 'CHAT': Greetings, small talk, thank you
-2. 'GRIEVANCE': Specific complaints (Roads damaged, Water not coming, Pension not received, Hospital refusing treatment)
-3. 'STATUS': Asking "What happened to my complaint?"
+2. 'GRIEVANCE': Specific complaints (Roads, Water, Pension, Hospital issues)
+3. 'STATUS': Asking about previous complaint status
 4. 'FEEDBACK': Ratings (1-5) or appreciation
-5. 'GENERAL_QUERY': Asking for information about schemes, hospitals, jobs, processes
+5. 'GENERAL_QUERY': Schemes info, processes, jobs, medical help questions
 
-*** OUTPUT FORMAT (JSON only, no markdown) ***
+*** OUTPUT FORMAT (JSON only) ***
 {
     "intent": "CHAT" | "GRIEVANCE" | "STATUS" | "FEEDBACK" | "GENERAL_QUERY",
     "detected_language": "en/te/hi/hinglish/ta/kn/ml/bn",
-    "reply": "Response in EXACT SAME language/script as user input - NO FRENCH/SPANISH/etc",
-    "grievance_data": {
-        "name": "extracted or null",
-        "area": "extracted or null", 
-        "category": "ENGLISH category from official list",
-        "description": "issue summary in English"
-    }
+    "reply": "Short WhatsApp-optimized response in user's language. NO FRENCH/SPANISH.",
+    "grievance_data": {"name": null, "area": null, "category": "English category", "description": "English summary"}
 }
 
-REMEMBER: If user writes "Mera beta ka ilaaz..." you reply "Aapki madad ke liye..." - SAME SCRIPT!"""
+REMEMBER: "Tu/Mera/De/Se/Me" in Indian context = HINDI, not European languages!"""
 
     try:
         chat = LlmChat(
@@ -153,32 +149,39 @@ REMEMBER: If user writes "Mera beta ka ilaaz..." you reply "Aapki madad ke liye.
             system_message=system_prompt
         ).with_model("openai", "gpt-4o-mini")
         
-        prompt = f"""Analyze this message from {sender_name}:
+        prompt = f"""Analyze this message from an Indian citizen:
 
 MESSAGE: "{text}"
 
-CRITICAL INSTRUCTIONS:
-1. Detect if this is Hinglish (Hindi in English letters like "Mera beta ka ilaaz kaarana hai")
-2. If Hinglish detected, you MUST reply in Hinglish (Hindi words in English letters)
-3. For medical issues, mention 108 ambulance, Aarogyasri scheme, CMO office
-4. ABSOLUTELY DO NOT reply in French, Spanish, or any non-Indian language
-5. If the message is about hospital refusing treatment, this is a GRIEVANCE about Health
-
-Classify intent and respond in the EXACT SAME language/script as the user."""
+CRITICAL:
+1. Words like "Tu", "Mera", "De", "Se", "Me" are HINDI, not French/Spanish
+2. Reply in the SAME language/script as the user
+3. For medical issues, mention 108 ambulance, Aarogyasri, CMO
+4. Keep response SHORT (WhatsApp optimized)
+5. NO French, Spanish, German, or Portuguese - ONLY English/Hindi/Telugu"""
 
         result = await chat.send_message(UserMessage(text=prompt))
         clean_result = result.replace('```json', '').replace('```', '').strip()
         parsed = json.loads(clean_result)
         
-        # Safety check - ensure no foreign language in reply
+        # THE "JUGAAD" SAFETY NET - Final check for foreign language hallucinations
         reply = parsed.get('reply', '')
-        foreign_indicators = ['je ', 'j\'ai', 'votre', 'nous', 'merci', 'bonjour', 'réclamation', 'gracias', 'hola', 'danke', 'bitte']
-        if any(indicator in reply.lower() for indicator in foreign_indicators):
-            # Fallback to safe Hinglish response
-            if 'medical' in text.lower() or 'hospital' in text.lower() or 'doctor' in text.lower() or 'ilaaz' in text.lower() or 'bimar' in text.lower():
-                parsed['reply'] = "Aapki pareshani samajh mein aayi. Medical emergency ke liye 108 ambulance call karein. Hospital mein problem ho toh District Collector office mein complaint karein. Aarogyasri scheme se free treatment mil sakta hai. Hum aapki madad zaroor karenge."
+        foreign_triggers = [' je ', ' suis ', ' nous ', ' vous ', ' gracias ', ' merci ', ' bonjour ', 
+                          ' j\'ai ', ' votre ', ' réclamation ', ' hola ', ' danke ', ' bitte ',
+                          ' est ', ' sont ', ' avec ', ' pour ', ' cette ']
+        
+        if any(trigger in f" {reply.lower()} " for trigger in foreign_triggers):
+            print(f"⚠️ IRON DOME: Foreign language detected in AI response. Fallback triggered.")
+            print(f"   Original reply: {reply[:100]}...")
+            
+            # Context-aware fallback
+            text_lower = text.lower()
+            if any(word in text_lower for word in ['hospital', 'doctor', 'ilaaz', 'bimar', 'treatment', 'medical', 'health']):
+                parsed['reply'] = "Namaste. Aapki medical samasya samajh aayi. 108 ambulance call karein emergency ke liye. Hospital mein problem ho toh District Collector office mein complaint karein. Aarogyasri se free treatment mil sakta hai."
+            elif any(word in text_lower for word in ['road', 'sadak', 'pani', 'water', 'bijli', 'electricity']):
+                parsed['reply'] = "Namaste. Aapki civic samasya note kar li hai. Kripya apna area/village ka naam batayein taaki hum jaldi madad kar sakein."
             else:
-                parsed['reply'] = "Aapki baat note kar li hai. Jald se jald aapko update milega. Kripya thoda intezaar karein."
+                parsed['reply'] = "Namaste. Aapki baat samajh aayi. Kripya thoda detail mein batayein - kya samasya hai aur kahan? Hum aapki madad zaroor karenge."
         
         parsed['detected_language'] = parsed.get('detected_language', detected_lang)
         
@@ -189,7 +192,7 @@ Classify intent and respond in the EXACT SAME language/script as the user."""
         return {
             "intent": "CHAT",
             "detected_language": detected_lang,
-            "reply": "Main aapki madad ke liye yahan hoon. Kaise help kar sakta hoon?",
+            "reply": "Namaste. Main aapki madad ke liye yahan hoon. Kaise seva kar sakta hoon?",
             "grievance_data": None
         }
 
