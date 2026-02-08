@@ -28,7 +28,10 @@ OFFICIAL_CATEGORIES = [
 ]
 
 def normalize_category(category: str) -> str:
-    """Normalize any category string to official English category"""
+    """
+    STRICT Category Sanitization - Maps ANY category to official English.
+    Handles Hindi/Telugu words like "Sadak", "Pani", "రోడ్డు" etc.
+    """
     if not category:
         return "Miscellaneous"
     
@@ -41,40 +44,129 @@ def normalize_category(category: str) -> str:
         if category.lower() == official.lower():
             return official
     
-    # Keyword mapping for legacy/non-standard categories
-    category_lower = category.lower()
+    # STRICT MAPPING: Hindi, Telugu, and English variations
+    category_lower = category.lower().strip()
     
-    mappings = {
+    strict_mappings = {
+        # Water (English, Hindi, Telugu)
         "water": "Water & Irrigation",
         "irrigation": "Water & Irrigation",
+        "pani": "Water & Irrigation",           # Hindi
+        "jal": "Water & Irrigation",            # Hindi
+        "neeru": "Water & Irrigation",          # Telugu
+        "niru": "Water & Irrigation",           # Telugu
+        "borewell": "Water & Irrigation",
+        "tank": "Water & Irrigation",
+        "pipeline": "Water & Irrigation",
+        "drinking water": "Water & Irrigation",
+        "water supply": "Water & Irrigation",
+        
+        # Roads/Infrastructure (English, Hindi, Telugu)
+        "road": "Infrastructure & Roads",
+        "roads": "Infrastructure & Roads",
+        "sadak": "Infrastructure & Roads",      # Hindi - CRITICAL FIX
+        "sarak": "Infrastructure & Roads",      # Hindi variant
+        "roddu": "Infrastructure & Roads",      # Telugu
+        "bridge": "Infrastructure & Roads",
+        "infrastructure": "Infrastructure & Roads",
+        "pothole": "Infrastructure & Roads",
+        "street": "Infrastructure & Roads",
+        "highway": "Infrastructure & Roads",
+        
+        # Agriculture
         "agriculture": "Agriculture",
         "farming": "Agriculture",
+        "krishi": "Agriculture",                # Hindi
+        "kisan": "Agriculture",                 # Hindi
+        "rythu": "Agriculture",                 # Telugu
+        "farmer": "Agriculture",
+        "crop": "Agriculture",
+        
+        # Health
         "health": "Health & Sanitation",
         "sanitation": "Health & Sanitation",
         "hospital": "Health & Sanitation",
+        "arogya": "Health & Sanitation",        # Hindi/Telugu
+        "swasthya": "Health & Sanitation",      # Hindi
+        "doctor": "Health & Sanitation",
+        "medical": "Health & Sanitation",
+        "garbage": "Health & Sanitation",
+        "drainage": "Health & Sanitation",
+        
+        # Education
         "education": "Education",
         "school": "Education",
-        "road": "Infrastructure & Roads",
-        "infrastructure": "Infrastructure & Roads",
+        "shiksha": "Education",                 # Hindi
+        "vidya": "Education",                   # Hindi/Telugu
+        "college": "Education",
+        "teacher": "Education",
+        
+        # Law & Order
         "law": "Law & Order",
         "police": "Law & Order",
+        "kanoon": "Law & Order",                # Hindi
+        "crime": "Law & Order",
+        "safety": "Law & Order",
+        "theft": "Law & Order",
+        
+        # Welfare
         "welfare": "Welfare Schemes",
         "pension": "Welfare Schemes",
+        "ration": "Welfare Schemes",
+        "scheme": "Welfare Schemes",
+        "yojana": "Welfare Schemes",            # Hindi
+        "housing": "Welfare Schemes",
+        "asara": "Welfare Schemes",             # Telugu scheme
+        "rythu bandhu": "Welfare Schemes",      # Telugu scheme
+        
+        # Electricity
         "electricity": "Electricity",
         "power": "Electricity",
+        "bijli": "Electricity",                 # Hindi
+        "vidyut": "Electricity",                # Hindi/Telugu
+        "current": "Electricity",
+        "transformer": "Electricity",
+        "light": "Electricity",
+        
+        # Environment
         "forest": "Forests & Environment",
         "environment": "Forests & Environment",
+        "van": "Forests & Environment",         # Hindi
+        "paryavaran": "Forests & Environment",  # Hindi
+        "pollution": "Forests & Environment",
+        "tree": "Forests & Environment",
+        
+        # Finance
         "tax": "Finance & Taxation",
+        "finance": "Finance & Taxation",
+        "kar": "Finance & Taxation",            # Hindi
+        
+        # Development
         "urban": "Urban & Rural Development",
         "rural": "Urban & Rural Development",
+        "development": "Urban & Rural Development",
+        "vikas": "Urban & Rural Development",   # Hindi
+        "municipal": "Urban & Rural Development",
+        "panchayat": "Urban & Rural Development",
+        
+        # Miscellaneous
         "general": "Miscellaneous",
         "other": "Miscellaneous",
+        "others": "Miscellaneous",
+        "misc": "Miscellaneous",
+        "anya": "Miscellaneous",                # Hindi
     }
     
-    for key, official in mappings.items():
+    # Check for exact match first
+    if category_lower in strict_mappings:
+        return strict_mappings[category_lower]
+    
+    # Check for keyword containment
+    for key, official in strict_mappings.items():
         if key in category_lower:
             return official
     
+    # Default to Miscellaneous if no match found
     return "Miscellaneous"
 
 # Global Configuration
