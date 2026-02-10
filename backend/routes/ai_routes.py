@@ -596,6 +596,101 @@ async def extract_from_media_endpoint(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/analyze_image")
+async def analyze_image_endpoint(
+    file: UploadFile = File(...),
+    current_user: TokenData = Depends(get_current_user)
+):
+    """
+    Dedicated Image Analysis Endpoint using Vision Model.
+    Extracts grievance information from images (JPG, PNG, etc.)
+    with enhanced OCR and context understanding.
+    """
+    try:
+        content = await file.read()
+        media_type = file.content_type or "image/jpeg"
+        
+        if not media_type.startswith('image/'):
+            raise HTTPException(status_code=400, detail="Only image files are supported by this endpoint")
+        
+        # Use the enhanced vision processing
+        extracted = await process_image_with_vision(content, media_type)
+        
+        if extracted:
+            return {"success": True, "data": extracted}
+        else:
+            return {"success": False, "error": "Could not extract information from image"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+async def process_image_with_vision(image_data: bytes, content_type: str) -> Dict[str, Any]:
+    """
+    Process image using GPT-4o Vision model for enhanced extraction.
+    This function is specifically optimized for grievance-related images.
+    """
+    try:
+        image_base64 = base64.b64encode(image_data).decode('utf-8')
+        
+        chat = LlmChat(
+            api_key=EMERGENT_LLM_KEY,
+            session_id=f"vision-analysis-{uuid.uuid4()}",
+            system_message="""You are an expert document analyzer for Indian government grievance systems.
+Your task is to extract grievance information from images with HIGH PRECISION.
+
+EXTRACTION RULES:
+1. **Name**: Look for applicant name, petitioner name, or any name field. Transliterate to English if in other scripts.
+2. **Contact**: Extract 10-digit Indian phone numbers (starting with 6,7,8,9)
+3. **Area**: Look for Mandal, Village, Town, Ward, District names. Transliterate accurately.
+4. **Category**: Map the issue to one of these EXACT categories:
+   - Water & Irrigation, Agriculture, Forests & Environment
+   - Health & Sanitation, Education, Infrastructure & Roads
+   - Law & Order, Welfare Schemes, Finance & Taxation
+   - Urban & Rural Development, Electricity, Miscellaneous
+5. **Description**: Summarize the grievance/issue in clear English (max 200 words)
+6. **Urgency**: Detect if it's an emergency (CRITICAL) or routine matter
+
+VISUAL ANALYSIS:
+- If image shows damaged infrastructure (road, bridge, building) → Infrastructure & Roads
+- If image shows water logging, dry taps, dirty water → Water & Irrigation
+- If image shows garbage, open drains, health hazard → Health & Sanitation
+- If image shows broken power lines, transformer → Electricity
+- If image shows documents/forms → Extract text content
+
+OUTPUT FORMAT (JSON only, no markdown):
+{
+    "name": "English transliterated name or null",
+    "contact": "10-digit phone or null",
+    "area": "Location/Village/Mandal name or null",
+    "category": "One of the 12 official categories",
+    "description": "Clear English description of the issue",
+    "urgency": "CRITICAL/HIGH/MEDIUM/LOW",
+    "language": "Original language code (en/te/hi/ta/kn/ml/bn)"
+}"""
+        ).with_model("openai", "gpt-4o")
+        
+        msg = UserMessage(
+            text="Analyze this image and extract grievance information. If it's a document, perform OCR. If it's a photo of an issue (road damage, water problem, etc.), describe the problem.",
+            file_contents=[FileContent(content_type=content_type, file_content_base64=image_base64)]
+        )
+        
+        result = await chat.send_message(msg)
+        clean_result = result.replace('```json', '').replace('```', '').strip()
+        extracted = json.loads(clean_result)
+        
+        # Ensure category is from official list
+        if extracted.get('category') not in OFFICIAL_CATEGORIES:
+            extracted['category'] = map_to_official_category(extracted.get('category', ''))
+        
+        return extracted
+        
+    except Exception as e:
+        print(f"❌ Vision analysis error: {e}")
+        return None
+
+
 @router.post("/transcribe")
 async def transcribe_endpoint(
     file: UploadFile = File(...),
