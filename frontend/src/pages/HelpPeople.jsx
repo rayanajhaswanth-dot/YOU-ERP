@@ -175,7 +175,6 @@ const GrievanceModal = ({ grievance, onClose, onUpdate }) => {
 
   if (!grievance) return null;
 
-  const token = localStorage.getItem('token');
   const status = grievance.status?.toUpperCase();
   const { date, time } = formatDateTime(grievance.created_at);
   const displayCategory = normalizeCategory(grievance.category || grievance.issue_type);
@@ -183,15 +182,12 @@ const GrievanceModal = ({ grievance, onClose, onUpdate }) => {
   const handleStartWork = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${BACKEND_URL}/api/grievances/${grievance.id}/start-work`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) {
+      const result = await api.put(`/api/grievances/${grievance.id}/start-work`, {});
+      if (result.ok) {
         toast.success("Work started on grievance");
         onUpdate();
       } else {
-        toast.error("Failed to start work");
+        toast.error(result.error || "Failed to start work");
       }
     } catch(e) {
       toast.error("Error: " + e.message);
