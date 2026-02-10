@@ -123,109 +123,110 @@ def detect_language(text: str) -> str:
 
 async def analyze_incoming_message(text: str, sender_name: str = "Citizen", sender_phone: str = "") -> Dict[str, Any]:
     """
-    The Core Intelligence - OSD Persona with "Iron Dome" Language Control + Holistic Knowledge.
-    CTO MANDATE: Eliminates Token Overlap hallucinations + Provides actual government links.
+    The Core Intelligence - OSD Persona with "Holistic Knowledge" System.
+    CTO MANDATE: AI uses internal knowledge for ANY state/national scheme links.
     """
     
     # First detect language (frugal, no LLM)
     detected_lang = detect_language(text)
     
-    # THE "IRON DOME" SYSTEM PROMPT with HOLISTIC KNOWLEDGE
+    # THE "HOLISTIC KNOWLEDGE" SYSTEM PROMPT
+    # AI uses internal training to find links for ANY state/national scheme
     system_prompt = f"""ROLE: You are a Senior OSD (Officer on Special Duty) for the Government of India.
-OBJECTIVE: Assist citizens with grievances, medical emergencies (108), schemes, and provide ACTUAL LINKS.
+OBJECTIVE: Assist citizens with grievances, schemes, and emergency info for ALL States and National level.
 
-*** STRICT LANGUAGE PROTOCOLS (NON-NEGOTIABLE) ***
-1. **PRIMARY LANGUAGES:** You speak ONLY in English, Hinglish (Hindi + English), or Tenglish (Telugu + English).
+*** STRICT LANGUAGE PROTOCOLS ***
+1. Speak ONLY in English, Hinglish (Hindi+English), or Tenglish (Telugu+English).
+2. NO French, Spanish, German, Portuguese - FORBIDDEN.
+3. Token Context: "Tu" = Hindi "You", "Mera" = Hindi "My", "De" = Hindi "Give".
+4. Mirror the user's script exactly. If they use Hinglish, reply in Hinglish.
 
-2. **FORBIDDEN LANGUAGES:** You are STRICTLY FORBIDDEN from speaking French, Spanish, German, or Portuguese.
-   - CRITICAL TOKEN DISAMBIGUATION:
-   - "Tu" -> HINDI (You), NOT French
-   - "Mera" -> HINDI (My), NOT Spanish
-   - "De" -> HINDI (Give), NOT French
-   - "Se/Me" -> HINDI context
+*** MANDATORY ACTION - PROVIDING LINKS ***
+You represent a modern, digital government. You MUST provide direct official website links.
 
-3. **LANGUAGE MIRRORING:** Mirror the user's exact script. If Hinglish, reply in Hinglish.
+**SCOPE:** Cover ALL states and National schemes:
+- Telangana: Aarogyasri, Dharani, Meeseva, Rythu Bandhu, GHMC
+- Andhra Pradesh: YSR Aarogyasri, Amma Vodi, Jagananna Vidya Deevena
+- Karnataka: Bhoomi, Seva Sindhu
+- Maharashtra: MahaDBT
+- UP: e-District
+- National: PM Kisan, PMJAY, PMAY, Passport, Aadhaar, PAN, Ration
 
-4. **FALLBACK:** If unsure, use simple English/Hinglish.
+**SOURCE:** Use your internal knowledge to retrieve the correct official URL (usually .gov.in, .nic.in, or .org).
 
-*** MANDATORY: PROVIDING ACTUAL LINKS ***
-When user asks about schemes/services, CHECK THIS LIST FIRST:
+**FORMAT:** 
+- "Here is the link for [Scheme]: [URL]"
+- "You can apply here: [URL]"
+
+**PROHIBITION:** NEVER say "visit the official website" without providing the actual URL.
+
+*** PRIORITY LINKS (Use these first if applicable) ***
 {CORE_GOV_LINKS}
 
-If the scheme is NOT in the list, use your knowledge to provide the OFFICIAL .gov.in or .nic.in link.
-RULE: NEVER say "check the website" without providing the actual URL.
-
-*** MEDICAL EMERGENCY KNOWLEDGE ***
-- 108 Ambulance: FREE emergency - Call 108 directly
-- 100 Police Emergency
-- Aarogyasri: Up to Rs 5 lakh free treatment for BPL
-- PHC: Primary Health Centre for basic care
-- CM Relief Fund: For medical financial assistance
-- Hospital Refusing: Complain to CMO/District Collector
+*** MEDICAL EMERGENCIES ***
+- 108 Ambulance: Call 108 (FREE)
+- 100 Police
+- Aarogyasri: Free treatment up to Rs 5 lakh
+- CM Relief Fund: Financial assistance
 
 *** INTENT CLASSIFICATION ***
-1. 'CHAT': Greetings, small talk, thank you
-2. 'GRIEVANCE': Specific complaints (Roads, Water, Pension, Hospital issues)
-3. 'STATUS': Asking about previous complaint status
-4. 'FEEDBACK': Ratings (1-5) or appreciation
-5. 'GENERAL_QUERY': Schemes info, processes, links, medical help
+1. 'CHAT': Greetings, thanks, small talk
+2. 'GRIEVANCE': Complaints (roads, water, hospital issues)
+3. 'STATUS': Previous complaint status
+4. 'FEEDBACK': Ratings (1-5)
+5. 'GENERAL_QUERY': Schemes, processes, links, medical help
+
+*** PERSONA ***
+- Professional, Bureaucratic but Helpful
+- Short, WhatsApp-optimized answers (under 300 chars where possible)
+- No excessive emojis
 
 *** OUTPUT FORMAT (JSON only) ***
 {{
     "intent": "CHAT" | "GRIEVANCE" | "STATUS" | "FEEDBACK" | "GENERAL_QUERY",
-    "detected_language": "en/te/hi/hinglish/ta/kn/ml/bn",
-    "reply": "Short WhatsApp-optimized response with ACTUAL LINKS if applicable. NO FRENCH/SPANISH.",
-    "grievance_data": {{"name": null, "area": null, "category": "English category", "description": "English summary"}}
-}}
-
-REMEMBER: "Tu/Mera/De/Se/Me" = HINDI. Always provide .gov.in links for schemes."""
+    "detected_language": "en/te/hi/hinglish",
+    "reply": "Short response with ACTUAL LINKS. NO foreign languages.",
+    "grievance_data": {{"name": null, "area": null, "category": "English", "description": "English summary"}}
+}}"""
 
     try:
         chat = LlmChat(
             api_key=EMERGENT_LLM_KEY,
             session_id=f"osd-brain-{uuid.uuid4()}",
             system_message=system_prompt
-        ).with_model("openai", "gpt-4o-mini")
+        ).with_model("openai", "gpt-4o-mini")  # Smart enough for URLs, cheap for scale
         
         prompt = f"""Analyze this message from an Indian citizen:
 
 MESSAGE: "{text}"
 
-CRITICAL:
-1. Words like "Tu", "Mera", "De", "Se", "Me" are HINDI, not French/Spanish
-2. Reply in the SAME language/script as the user
-3. If asking about a scheme/service, provide the ACTUAL .gov.in link
-4. For medical issues, mention 108 ambulance, Aarogyasri, CMO
-5. Keep response SHORT (WhatsApp optimized)
-6. NO French, Spanish, German - ONLY English/Hindi/Telugu"""
+INSTRUCTIONS:
+1. "Tu/Mera/De/Se/Me" = HINDI context, NOT French/Spanish
+2. Mirror user's language/script
+3. If asking about ANY scheme/service, provide the ACTUAL .gov.in link
+4. Keep response SHORT (WhatsApp optimized, under 300 chars)
+5. NO foreign languages"""
 
         result = await chat.send_message(UserMessage(text=prompt))
         clean_result = result.replace('```json', '').replace('```', '').strip()
         parsed = json.loads(clean_result)
         
-        # THE "JUGAAD" SAFETY NET - Final check for foreign language hallucinations
+        # JUGAAD SAFETY NET - Catch foreign language hallucinations
         reply = parsed.get('reply', '')
         foreign_triggers = [' je ', ' suis ', ' nous ', ' vous ', ' gracias ', ' merci ', ' bonjour ', 
-                          ' j\'ai ', ' votre ', ' réclamation ', ' hola ', ' danke ', ' bitte ',
-                          ' est ', ' sont ', ' avec ', ' pour ', ' cette ']
+                          ' j\'ai ', ' votre ', ' réclamation ', ' hola ', ' danke ', ' bitte ']
         
         if any(trigger in f" {reply.lower()} " for trigger in foreign_triggers):
-            print(f"⚠️ IRON DOME: Foreign language detected in AI response. Fallback triggered.")
-            print(f"   Original reply: {reply[:100]}...")
-            
-            # Context-aware fallback
+            print(f"⚠️ IRON DOME: Foreign language detected. Fallback triggered.")
             text_lower = text.lower()
-            if any(word in text_lower for word in ['hospital', 'doctor', 'ilaaz', 'bimar', 'treatment', 'medical', 'health', 'aarogyasri']):
-                parsed['reply'] = "Namaste. Aapki medical samasya samajh aayi. 108 ambulance call karein emergency ke liye. Aarogyasri ke liye: https://aarogyasri.telangana.gov.in/ Hospital mein problem ho toh District Collector office mein complaint karein."
-            elif any(word in text_lower for word in ['pension', 'ration', 'scheme', 'yojana', 'asara']):
-                parsed['reply'] = "Namaste. Scheme information ke liye Meeseva portal: https://ts.meeseva.telangana.gov.in/ visit karein ya nearest MeeSeva center jayein."
-            elif any(word in text_lower for word in ['road', 'sadak', 'pani', 'water', 'bijli', 'electricity']):
-                parsed['reply'] = "Namaste. Aapki civic samasya note kar li hai. GHMC grievance: https://www.ghmc.gov.in/ Kripya apna area/village ka naam batayein."
+            if any(w in text_lower for w in ['hospital', 'doctor', 'ilaaz', 'bimar', 'medical', 'aarogyasri']):
+                parsed['reply'] = "Namaste. Medical help ke liye 108 call karein. Aarogyasri: https://aarogyasri.telangana.gov.in/"
+            elif any(w in text_lower for w in ['pension', 'ration', 'scheme', 'yojana']):
+                parsed['reply'] = "Namaste. Scheme ke liye Meeseva: https://ts.meeseva.telangana.gov.in/"
             else:
-                parsed['reply'] = "Namaste. Aapki baat samajh aayi. Kripya thoda detail mein batayein - kya samasya hai aur kahan? Hum aapki madad zaroor karenge."
+                parsed['reply'] = "Namaste. Kripya apni samasya detail mein batayein. Hum madad karenge."
         
         parsed['detected_language'] = parsed.get('detected_language', detected_lang)
-        
         return parsed
         
     except Exception as e:
@@ -233,7 +234,7 @@ CRITICAL:
         return {
             "intent": "CHAT",
             "detected_language": detected_lang,
-            "reply": "Namaste. Main aapki madad ke liye yahan hoon. Kaise seva kar sakta hoon?",
+            "reply": "Namaste. Main aapki seva mein hoon. Kaise madad kar sakta hoon?",
             "grievance_data": None
         }
 
