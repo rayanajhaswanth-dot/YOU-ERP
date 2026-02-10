@@ -218,33 +218,24 @@ const GrievanceModal = ({ grievance, onClose, onUpdate }) => {
         const formData = new FormData();
         formData.append('file', selectedFile);
         
-        const res = await fetch(`${BACKEND_URL}/api/grievances/${grievance.id}/upload-file`, {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${token}` },
-          body: formData
-        });
+        const result = await api.upload(`/api/grievances/${grievance.id}/upload-file`, formData);
         
-        if (res.ok) {
+        if (result.ok) {
           toast.success("Photo uploaded successfully!");
           setSelectedFile(null);
           onUpdate();
         } else {
-          const err = await res.json();
-          toast.error(err.detail || "Failed to upload photo");
+          toast.error(result.error || "Failed to upload photo");
         }
       } else if (uploadMethod === 'url' && photoUrl) {
-        const res = await fetch(`${BACKEND_URL}/api/grievances/${grievance.id}/upload-resolution-photo`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-          body: JSON.stringify({ resolution_image_url: photoUrl })
-        });
+        const result = await api.put(`/api/grievances/${grievance.id}/upload-resolution-photo`, { resolution_image_url: photoUrl });
         
-        if (res.ok) {
+        if (result.ok) {
           toast.success("Photo URL saved!");
           setPhotoUrl('');
           onUpdate();
         } else {
-          toast.error("Failed to save photo URL");
+          toast.error(result.error || "Failed to save photo URL");
         }
       } else {
         toast.error("Please select a file or enter a URL");
@@ -258,18 +249,13 @@ const GrievanceModal = ({ grievance, onClose, onUpdate }) => {
   const handleResolve = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${BACKEND_URL}/api/grievances/${grievance.id}/resolve`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ send_notification: true })
-      });
-      if (res.ok) {
+      const result = await api.put(`/api/grievances/${grievance.id}/resolve`, { send_notification: true });
+      if (result.ok) {
         toast.success("Grievance resolved! Citizen notified.");
         onUpdate();
         onClose();
       } else {
-        const err = await res.json();
-        toast.error(err.detail || "Failed to resolve");
+        toast.error(result.error || "Failed to resolve");
       }
     } catch(e) {
       toast.error("Error: " + e.message);
