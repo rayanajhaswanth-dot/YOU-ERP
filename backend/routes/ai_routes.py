@@ -20,6 +20,47 @@ router = APIRouter()
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')
 
 # ==============================================================================
+# CORE GOVERNMENT LINKS KNOWLEDGE BASE
+# ==============================================================================
+CORE_GOV_LINKS = """
+[TELANGANA SPECIFIC]
+- Aarogyasri (Telangana): https://aarogyasri.telangana.gov.in/
+- Kalyana Lakshmi/Shaadi Mubarak: https://telanganaepass.cgg.gov.in/
+- Traffic Challan: https://echallan.tspolice.gov.in/publicview/
+- Dharani Portal (Land Records): https://dharani.telangana.gov.in/
+- Meeseva Services: https://ts.meeseva.telangana.gov.in/
+- GHMC Grievance: https://www.ghmc.gov.in/
+- CM Relief Fund (TS): https://cmrf.telangana.gov.in/
+- Rythu Bandhu: https://rytubandhu.telangana.gov.in/
+- T-Hub (Startups): https://t-hub.co/
+
+[ANDHRA PRADESH SPECIFIC]
+- YSR Aarogyasri (AP): http://ysraarogyasri.ap.gov.in/
+- Amma Vodi: https://jaganannaammavodi.ap.gov.in/
+- Jagananna Vidya Deevena: https://jnanabhumi.ap.gov.in/
+- CFMS (Finance): https://cfms.ap.gov.in/
+- Meeseva (AP): https://ap.meeseva.gov.in/
+
+[NATIONAL SCHEMES & EMERGENCY]
+- 108 Ambulance: Call 108 directly (Free Emergency Service)
+- 100 Police: Call 100 for police emergencies
+- PM Kisan: https://pmkisan.gov.in/
+- PMAY (Housing): https://pmaymis.gov.in/
+- Aadhaar: https://uidai.gov.in/
+- Ration Card (PDS): https://nfsa.gov.in/ or state-specific portals
+- National Grievance (CPGRAMS): https://pgportal.gov.in/
+- DigiLocker: https://digilocker.gov.in/
+- UMANG App: https://web.umang.gov.in/
+- E-Shram (Labour): https://eshram.gov.in/
+
+[OTHER STATE PORTALS]
+- Karnataka Bhoomi (Land): https://landrecords.karnataka.gov.in/
+- Maharashtra MahaDBT: https://mahadbt.maharashtra.gov.in/
+- UP e-District: https://edistrict.up.gov.in/
+- Bihar RTPS: https://serviceonline.bihar.gov.in/
+"""
+
+# ==============================================================================
 # 11 OFFICIAL CATEGORIES (ENGLISH ONLY)
 # ==============================================================================
 OFFICIAL_CATEGORIES = [
