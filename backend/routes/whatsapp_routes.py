@@ -533,17 +533,17 @@ async def whatsapp_status():
     """Check WhatsApp bot status"""
     return {
         "status": "active",
-        "version": "3.5 - Iron Dome + Holistic Knowledge",
+        "version": "4.0 - Holistic Knowledge + Vision Analysis",
         "features": [
+            "HOLISTIC KNOWLEDGE - AI retrieves official URLs for ANY scheme across ALL states",
             "IRON DOME System Prompt - Eliminates Token Overlap hallucinations",
             "Token Disambiguation: Tu/Mera/De/Se/Me → HINDI (not French/Spanish)",
             "JUGAAD Safety Net - Catches foreign language in final response",
-            "HOLISTIC KNOWLEDGE BASE - Telangana, AP, National & Other States",
-            "ACTUAL LINKS - Provides .gov.in URLs for schemes/services",
+            "VISION API - Image analysis for grievance photos using GPT-4o",
+            "PDF Deep OCR - Extract grievance data from documents",
             "Intent Classification (CHAT/GRIEVANCE/STATUS/FEEDBACK/GENERAL_QUERY)",
             "Hinglish/Tenglish Support - Mirror exact user script",
             "Medical Domain: 108 Ambulance, Aarogyasri, PHC, CMO",
-            "PDF/Image Deep OCR with English normalization",
             "Voice Transcription: FFmpeg OGG→MP3 + Whisper",
             "Category Sanitization: Sadak/Pani → Infrastructure/Water",
             "Native Language Resolution Notifications"
@@ -551,6 +551,11 @@ async def whatsapp_status():
         "intents": ["CHAT", "GRIEVANCE", "STATUS", "FEEDBACK", "GENERAL_QUERY"],
         "supported_languages": ["English", "Hinglish (Hindi-Roman)", "Tenglish (Telugu-Roman)", "Hindi (Devanagari)", "Telugu", "Tamil", "Kannada", "Malayalam", "Bengali"],
         "forbidden_languages": ["French", "Spanish", "German", "Portuguese"],
-        "knowledge_coverage": ["Telangana", "Andhra Pradesh", "National Schemes", "Karnataka", "Maharashtra", "UP", "Bihar"],
+        "knowledge_coverage": [
+            "All 28 States + 8 Union Territories",
+            "All Central/National schemes",
+            "Historical schemes (renamed/merged)",
+            "Emergency services (108, 100, 112)"
+        ],
         "categories": OFFICIAL_CATEGORIES
     }
