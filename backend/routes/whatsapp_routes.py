@@ -533,23 +533,24 @@ async def whatsapp_status():
     """Check WhatsApp bot status"""
     return {
         "status": "active",
-        "version": "3.4 - Iron Dome Language Control",
+        "version": "3.5 - Iron Dome + Holistic Knowledge",
         "features": [
             "IRON DOME System Prompt - Eliminates Token Overlap hallucinations",
             "Token Disambiguation: Tu/Mera/De/Se/Me → HINDI (not French/Spanish)",
             "JUGAAD Safety Net - Catches foreign language in final response",
+            "HOLISTIC KNOWLEDGE BASE - Telangana, AP, National & Other States",
+            "ACTUAL LINKS - Provides .gov.in URLs for schemes/services",
             "Intent Classification (CHAT/GRIEVANCE/STATUS/FEEDBACK/GENERAL_QUERY)",
             "Hinglish/Tenglish Support - Mirror exact user script",
-            "Medical Domain: 108 Ambulance, Aarogyasri, PHC, CMO, District Collector",
-            "Government Schemes: Rythu Bandhu, PM Kisan, PMAY, Asara Pension",
+            "Medical Domain: 108 Ambulance, Aarogyasri, PHC, CMO",
             "PDF/Image Deep OCR with English normalization",
             "Voice Transcription: FFmpeg OGG→MP3 + Whisper",
             "Category Sanitization: Sadak/Pani → Infrastructure/Water",
-            "Native Language Resolution Notifications",
-            "Delete/Close buttons on grievance cards"
+            "Native Language Resolution Notifications"
         ],
         "intents": ["CHAT", "GRIEVANCE", "STATUS", "FEEDBACK", "GENERAL_QUERY"],
         "supported_languages": ["English", "Hinglish (Hindi-Roman)", "Tenglish (Telugu-Roman)", "Hindi (Devanagari)", "Telugu", "Tamil", "Kannada", "Malayalam", "Bengali"],
         "forbidden_languages": ["French", "Spanish", "German", "Portuguese"],
+        "knowledge_coverage": ["Telangana", "Andhra Pradesh", "National Schemes", "Karnataka", "Maharashtra", "UP", "Bihar"],
         "categories": OFFICIAL_CATEGORIES
     }
