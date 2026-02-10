@@ -596,7 +596,6 @@ const HelpPeople = () => {
 
   const handleRegister = async () => {
     try {
-        const token = localStorage.getItem('token');
         const deadlineHours = formData.priority_level === 'CRITICAL' ? 4 : (formData.priority_level === 'HIGH' ? 24 : 168);
         const deadline = new Date(Date.now() + deadlineHours * 3600000).toISOString();
 
@@ -607,25 +606,17 @@ const HelpPeople = () => {
           village: formData.location // Map location to village field
         };
 
-        const res = await fetch(`${BACKEND_URL}/api/grievances/`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-            body: JSON.stringify(payload)
-        });
+        const result = await api.post('/api/grievances/', payload);
 
-        if (res.ok) {
-            const newGrievance = await res.json();
+        if (result.ok) {
+            const newGrievance = result.data;
             
             // Upload media if attached
             if (mediaFile && newGrievance.id) {
               const formDataMedia = new FormData();
               formDataMedia.append('file', mediaFile);
               
-              await fetch(`${BACKEND_URL}/api/grievances/${newGrievance.id}/upload-file`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` },
-                body: formDataMedia
-              });
+              await api.upload(`/api/grievances/${newGrievance.id}/upload-file`, formDataMedia);
             }
             
             toast.success("Grievance Registered Successfully");
@@ -634,7 +625,7 @@ const HelpPeople = () => {
             fetchGrievances();
             setIsAddOpen(false);
         } else {
-            toast.error("Registration Failed");
+            toast.error(result.error || "Registration Failed");
         }
     } catch(e) { toast.error("Registration Failed: " + e.message); }
   };
