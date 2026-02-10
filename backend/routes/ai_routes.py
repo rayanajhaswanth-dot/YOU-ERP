@@ -234,7 +234,7 @@ INSTRUCTIONS:
                           ' j\'ai ', ' votre ', ' réclamation ', ' hola ', ' danke ', ' bitte ']
         
         if any(trigger in f" {reply.lower()} " for trigger in foreign_triggers):
-            print(f"⚠️ IRON DOME: Foreign language detected. Fallback triggered.")
+            print("⚠️ IRON DOME: Foreign language detected. Fallback triggered.")
             text_lower = text.lower()
             if any(w in text_lower for w in ['hospital', 'doctor', 'ilaaz', 'bimar', 'medical', 'aarogyasri']):
                 parsed['reply'] = "Namaste. Medical help ke liye 108 call karein. Aarogyasri: https://aarogyasri.telangana.gov.in/"
@@ -424,7 +424,7 @@ async def transcribe_audio(audio_binary: bytes, content_type: str = "audio/ogg")
                     print(f"⚠️ FFmpeg conversion failed or output too small. stderr: {result.stderr[:200] if result.stderr else 'none'}")
                     # Try with original file anyway
             except subprocess.TimeoutExpired:
-                print(f"⚠️ FFmpeg conversion timed out")
+                print("⚠️ FFmpeg conversion timed out")
             except Exception as conv_error:
                 print(f"⚠️ FFmpeg error: {conv_error}")
         
