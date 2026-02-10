@@ -980,12 +980,12 @@ const HelpPeople = () => {
         <GrievanceModal 
           grievance={selectedGrievance}
           onClose={() => setSelectedGrievance(null)}
-          onUpdate={() => {
+          onUpdate={async () => {
             fetchGrievances();
-            const token = localStorage.getItem('token');
-            fetch(`${BACKEND_URL}/api/grievances/${selectedGrievance.id}`, {
-              headers: { 'Authorization': `Bearer ${token}` }
-            }).then(r => r.json()).then(data => setSelectedGrievance(data)).catch(() => {});
+            const result = await api.get(`/api/grievances/${selectedGrievance.id}`);
+            if (result.ok) {
+              setSelectedGrievance(result.data);
+            }
           }}
         />
       )}
