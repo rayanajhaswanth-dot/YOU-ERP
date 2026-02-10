@@ -508,12 +508,17 @@ const HelpPeople = () => {
 
   const fetchGrievances = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${BACKEND_URL}/api/grievances/`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if(res.ok) setGrievances(await res.json());
-    } catch(e) { console.error(e); } 
+      const result = await api.get('/api/grievances/');
+      if (result.ok) {
+        setGrievances(result.data);
+      } else {
+        console.error('Failed to fetch grievances:', result.error);
+        toast.error('Failed to load grievances');
+      }
+    } catch(e) { 
+      console.error(e); 
+      toast.error('Error loading grievances');
+    } 
     finally { setLoading(false); }
   };
 
