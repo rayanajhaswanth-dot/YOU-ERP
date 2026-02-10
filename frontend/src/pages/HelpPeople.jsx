@@ -531,18 +531,13 @@ const HelpPeople = () => {
     }
     
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${BACKEND_URL}/api/grievances/${grievanceId}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+      const result = await api.delete(`/api/grievances/${grievanceId}`);
       
-      if (res.ok) {
+      if (result.ok) {
         toast.success("Grievance deleted successfully");
         fetchGrievances(); // Refresh list
       } else {
-        const err = await res.json();
-        toast.error(err.detail || "Failed to delete grievance");
+        toast.error(result.error || "Failed to delete grievance");
       }
     } catch (e) {
       toast.error("Error deleting grievance: " + e.message);
@@ -563,34 +558,33 @@ const HelpPeople = () => {
       if (file.type === 'application/pdf' || file.type.startsWith('image/')) {
         toast.info("Processing document with AI...");
         try {
-          const token = localStorage.getItem('token');
           const extractFormData = new FormData();
           extractFormData.append('file', file);
           
-          const res = await fetch(`${BACKEND_URL}/api/ai/extract_from_media`, {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${token}` },
-            body: extractFormData
-          });
+          // Use the appropriate endpoint based on file type
+          const endpoint = file.type.startsWith('image/') 
+            ? '/api/ai/analyze_image' 
+            : '/api/ai/extract_from_media';
           
-          if (res.ok) {
-            const result = await res.json();
-            if (result.success && result.data) {
-              const extracted = result.data;
-              
-              // Auto-fill form with extracted data
-              setFormData(prev => ({
-                ...prev,
-                citizen_name: extracted.name || prev.citizen_name,
-                citizen_phone: extracted.contact || prev.citizen_phone,
-                location: extracted.area || prev.location,
-                category: extracted.category || prev.category,
-                description: extracted.description || prev.description,
-                priority_level: getCategoryPriority(extracted.category || prev.category)
-              }));
-              
-              toast.success("Document processed! Form auto-filled with extracted data.");
-            }
+          const result = await api.upload(endpoint, extractFormData);
+          
+          if (result.ok && result.data?.success && result.data?.data) {
+            const extracted = result.data.data;
+            
+            // Auto-fill form with extracted data
+            setFormData(prev => ({
+              ...prev,
+              citizen_name: extracted.name || prev.citizen_name,
+              citizen_phone: extracted.contact || prev.citizen_phone,
+              location: extracted.area || prev.location,
+              category: extracted.category || prev.category,
+              description: extracted.description || prev.description,
+              priority_level: extracted.urgency || getCategoryPriority(extracted.category || prev.category)
+            }));
+            
+            toast.success("Document processed! Form auto-filled with extracted data.");
+          } else {
+            toast.info("Could not auto-extract info. Please fill the form manually.");
           }
         } catch (err) {
           console.error("AI extraction error:", err);
