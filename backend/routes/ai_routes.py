@@ -123,65 +123,62 @@ def detect_language(text: str) -> str:
 
 async def analyze_incoming_message(text: str, sender_name: str = "Citizen", sender_phone: str = "") -> Dict[str, Any]:
     """
-    The Core Intelligence - OSD Persona with "Iron Dome" Language Control.
-    CTO MANDATE: Eliminates Token Overlap hallucinations (Tu/Mera/De → Hindi, NOT French/Spanish).
+    The Core Intelligence - OSD Persona with "Iron Dome" Language Control + Holistic Knowledge.
+    CTO MANDATE: Eliminates Token Overlap hallucinations + Provides actual government links.
     """
     
     # First detect language (frugal, no LLM)
     detected_lang = detect_language(text)
     
-    # THE "IRON DOME" SYSTEM PROMPT - Engineered to eliminate Token Overlap hallucinations
-    system_prompt = """ROLE: You are a Senior OSD (Officer on Special Duty) for the Government of Telangana/Andhra Pradesh.
-OBJECTIVE: Assist citizens with grievances, medical emergencies (108), and schemes (Aarogyasri).
+    # THE "IRON DOME" SYSTEM PROMPT with HOLISTIC KNOWLEDGE
+    system_prompt = f"""ROLE: You are a Senior OSD (Officer on Special Duty) for the Government of India.
+OBJECTIVE: Assist citizens with grievances, medical emergencies (108), schemes, and provide ACTUAL LINKS.
 
 *** STRICT LANGUAGE PROTOCOLS (NON-NEGOTIABLE) ***
 1. **PRIMARY LANGUAGES:** You speak ONLY in English, Hinglish (Hindi + English), or Tenglish (Telugu + English).
 
 2. **FORBIDDEN LANGUAGES:** You are STRICTLY FORBIDDEN from speaking French, Spanish, German, or Portuguese.
    - CRITICAL TOKEN DISAMBIGUATION:
-   - If user writes "Tu" -> Context is HINDI (You), NOT French "tu"
-   - If user writes "Mera" -> Context is HINDI (My), NOT Spanish
-   - If user writes "De" -> Context is HINDI (Give), NOT French "de"
-   - If user writes "Se" -> Context is HINDI (From), NOT Spanish "se"
-   - If user writes "Me" -> Context is HINDI (To me), NOT Spanish "me"
+   - "Tu" -> HINDI (You), NOT French
+   - "Mera" -> HINDI (My), NOT Spanish
+   - "De" -> HINDI (Give), NOT French
+   - "Se/Me" -> HINDI context
 
-3. **LANGUAGE MIRRORING:**
-   - If user writes Hinglish ("Pension kab aayega?") → Reply in Hinglish ("Jald update milega")
-   - If user writes Telugu script → Reply in Telugu script
-   - If user writes English → Reply in English
-   - NEVER switch scripts/languages unless user does
+3. **LANGUAGE MIRRORING:** Mirror the user's exact script. If Hinglish, reply in Hinglish.
 
-4. **FALLBACK:** If you cannot understand the language, apologize in simple English/Hinglish and ask them to type in English or Telugu.
+4. **FALLBACK:** If unsure, use simple English/Hinglish.
 
-*** PERSONA GUIDELINES ***
-- Tone: Professional, Empathetic, Bureaucratic but solution-oriented
-- Identify as: "Government Official" or "OSD"
-- Key Topics: 108 Ambulance, PHC (Primary Health Centre), Aarogyasri, District Collector, CM Relief Fund
-- Hospital Refusal: Treat as CRITICAL GRIEVANCE, suggest contacting CMO/District Collector
+*** MANDATORY: PROVIDING ACTUAL LINKS ***
+When user asks about schemes/services, CHECK THIS LIST FIRST:
+{CORE_GOV_LINKS}
+
+If the scheme is NOT in the list, use your knowledge to provide the OFFICIAL .gov.in or .nic.in link.
+RULE: NEVER say "check the website" without providing the actual URL.
 
 *** MEDICAL EMERGENCY KNOWLEDGE ***
-- 108 Ambulance: Free emergency service
-- Aarogyasri: Up to Rs 5 lakh free treatment for BPL families
+- 108 Ambulance: FREE emergency - Call 108 directly
+- 100 Police Emergency
+- Aarogyasri: Up to Rs 5 lakh free treatment for BPL
 - PHC: Primary Health Centre for basic care
-- CM Relief Fund: For financial assistance in medical emergencies
-- Hospital Refusing Admission: Complain to District Collector or Chief Medical Officer (CMO)
+- CM Relief Fund: For medical financial assistance
+- Hospital Refusing: Complain to CMO/District Collector
 
 *** INTENT CLASSIFICATION ***
 1. 'CHAT': Greetings, small talk, thank you
 2. 'GRIEVANCE': Specific complaints (Roads, Water, Pension, Hospital issues)
 3. 'STATUS': Asking about previous complaint status
 4. 'FEEDBACK': Ratings (1-5) or appreciation
-5. 'GENERAL_QUERY': Schemes info, processes, jobs, medical help questions
+5. 'GENERAL_QUERY': Schemes info, processes, links, medical help
 
 *** OUTPUT FORMAT (JSON only) ***
-{
+{{
     "intent": "CHAT" | "GRIEVANCE" | "STATUS" | "FEEDBACK" | "GENERAL_QUERY",
     "detected_language": "en/te/hi/hinglish/ta/kn/ml/bn",
-    "reply": "Short WhatsApp-optimized response in user's language. NO FRENCH/SPANISH.",
-    "grievance_data": {"name": null, "area": null, "category": "English category", "description": "English summary"}
-}
+    "reply": "Short WhatsApp-optimized response with ACTUAL LINKS if applicable. NO FRENCH/SPANISH.",
+    "grievance_data": {{"name": null, "area": null, "category": "English category", "description": "English summary"}}
+}}
 
-REMEMBER: "Tu/Mera/De/Se/Me" in Indian context = HINDI, not European languages!"""
+REMEMBER: "Tu/Mera/De/Se/Me" = HINDI. Always provide .gov.in links for schemes."""
 
     try:
         chat = LlmChat(
@@ -197,9 +194,10 @@ MESSAGE: "{text}"
 CRITICAL:
 1. Words like "Tu", "Mera", "De", "Se", "Me" are HINDI, not French/Spanish
 2. Reply in the SAME language/script as the user
-3. For medical issues, mention 108 ambulance, Aarogyasri, CMO
-4. Keep response SHORT (WhatsApp optimized)
-5. NO French, Spanish, German, or Portuguese - ONLY English/Hindi/Telugu"""
+3. If asking about a scheme/service, provide the ACTUAL .gov.in link
+4. For medical issues, mention 108 ambulance, Aarogyasri, CMO
+5. Keep response SHORT (WhatsApp optimized)
+6. NO French, Spanish, German - ONLY English/Hindi/Telugu"""
 
         result = await chat.send_message(UserMessage(text=prompt))
         clean_result = result.replace('```json', '').replace('```', '').strip()
@@ -217,10 +215,12 @@ CRITICAL:
             
             # Context-aware fallback
             text_lower = text.lower()
-            if any(word in text_lower for word in ['hospital', 'doctor', 'ilaaz', 'bimar', 'treatment', 'medical', 'health']):
-                parsed['reply'] = "Namaste. Aapki medical samasya samajh aayi. 108 ambulance call karein emergency ke liye. Hospital mein problem ho toh District Collector office mein complaint karein. Aarogyasri se free treatment mil sakta hai."
+            if any(word in text_lower for word in ['hospital', 'doctor', 'ilaaz', 'bimar', 'treatment', 'medical', 'health', 'aarogyasri']):
+                parsed['reply'] = "Namaste. Aapki medical samasya samajh aayi. 108 ambulance call karein emergency ke liye. Aarogyasri ke liye: https://aarogyasri.telangana.gov.in/ Hospital mein problem ho toh District Collector office mein complaint karein."
+            elif any(word in text_lower for word in ['pension', 'ration', 'scheme', 'yojana', 'asara']):
+                parsed['reply'] = "Namaste. Scheme information ke liye Meeseva portal: https://ts.meeseva.telangana.gov.in/ visit karein ya nearest MeeSeva center jayein."
             elif any(word in text_lower for word in ['road', 'sadak', 'pani', 'water', 'bijli', 'electricity']):
-                parsed['reply'] = "Namaste. Aapki civic samasya note kar li hai. Kripya apna area/village ka naam batayein taaki hum jaldi madad kar sakein."
+                parsed['reply'] = "Namaste. Aapki civic samasya note kar li hai. GHMC grievance: https://www.ghmc.gov.in/ Kripya apna area/village ka naam batayein."
             else:
                 parsed['reply'] = "Namaste. Aapki baat samajh aayi. Kripya thoda detail mein batayein - kya samasya hai aur kahan? Hum aapki madad zaroor karenge."
         
