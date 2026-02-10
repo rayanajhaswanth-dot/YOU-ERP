@@ -11,9 +11,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, Cartes
 import { toast } from "sonner";
 import VoiceRecorder from '../components/VoiceRecorder';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "../components/ui/collapsible";
-import { safeFetch, api } from '../utils/safeFetch';
-
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+import { api } from '../utils/safeFetch';
 
 // 11 GOVERNANCE CATEGORIES (English Standard)
 const CATEGORIES = [
