@@ -8,7 +8,7 @@ Your WhatsApp bot is now fully integrated with Twilio!
 
 - **Twilio Account SID**: AC5a8406a536d966d13f625688d747979b
 - **WhatsApp Number**: +1 (415) 523-8886 (Twilio Sandbox)
-- **Webhook URL**: `https://legismate.preview.emergentagent.com/api/whatsapp/webhook`
+- **Webhook URL**: `https://you-legislate.preview.emergentagent.com/api/whatsapp/webhook`
 
 ### 🔧 Twilio Setup Steps
 
@@ -16,7 +16,7 @@ Your WhatsApp bot is now fully integrated with Twilio!
 2. **Navigate to**: Messaging > Try it out > Send a WhatsApp message
 3. **Configure Webhook**:
    - Go to: Programmable Messaging > Settings > WhatsApp Sandbox Settings
-   - Set "WHEN A MESSAGE COMES IN" to: `https://legismate.preview.emergentagent.com/api/whatsapp/webhook`
+   - Set "WHEN A MESSAGE COMES IN" to: `https://you-legislate.preview.emergentagent.com/api/whatsapp/webhook`
    - Method: POST
    - Click Save
 
@@ -99,7 +99,7 @@ POST /api/whatsapp/webhook
 
 **Send Message**:
 ```bash
-curl -X POST "https://legismate.preview.emergentagent.com/api/whatsapp/send" \
+curl -X POST "https://you-legislate.preview.emergentagent.com/api/whatsapp/send" \
   -H "Content-Type: application/json" \
   -d '{
     "to": "+919876543210",
@@ -109,12 +109,12 @@ curl -X POST "https://legismate.preview.emergentagent.com/api/whatsapp/send" \
 
 **Status Check**:
 ```bash
-curl "https://legismate.preview.emergentagent.com/api/whatsapp/status"
+curl "https://you-legislate.preview.emergentagent.com/api/whatsapp/status"
 ```
 
 **Broadcast** (send to all constituents):
 ```bash
-curl -X POST "https://legismate.preview.emergentagent.com/api/whatsapp/broadcast?politician_id=<id>&message=Important announcement"
+curl -X POST "https://you-legislate.preview.emergentagent.com/api/whatsapp/broadcast?politician_id=<id>&message=Important announcement"
 ```
 
 ### 🧪 Test the Bot
