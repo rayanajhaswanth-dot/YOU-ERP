@@ -304,15 +304,13 @@ async def extract_grievance_from_media(media_data: bytes, media_type: str) -> Di
     HIGH-PRECISION "Deep OCR" extraction for PDF/Image.
     Handles mixed languages (Hindi name, English description) and normalizes ALL fields to English.
     
-    CTO CODE RED FIX: Use proper image_url format for OpenAI Vision API.
+    CTO CODE RED FIX: Use direct OpenAI API for image vision to avoid LiteLLM compatibility issues.
     """
     try:
         media_base64 = base64.b64encode(media_data).decode('utf-8')
         
-        # Determine correct MIME type for the Vision API
+        # Determine correct MIME type
         if 'pdf' in media_type.lower():
-            # PDFs need special handling - convert first page to image
-            print("📄 PDF detected - using PDF extraction mode")
             content_type = "application/pdf"
         elif 'png' in media_type.lower():
             content_type = "image/png"
@@ -325,52 +323,19 @@ async def extract_grievance_from_media(media_data: bytes, media_type: str) -> Di
         
         print(f"📎 Processing media: type={content_type}, size={len(media_data)} bytes")
         
-        # For images, use direct OpenAI Vision API format which is more reliable
-        if content_type.startswith('image/'):
-            from openai import AsyncOpenAI
-            
-            client = AsyncOpenAI(
-                api_key=EMERGENT_LLM_KEY,
-                base_url="https://emergent-z1k3lu-v2.openai.azure.com/"
-            )
-            
-            response = await client.chat.completions.create(
-                model="gpt-4o",
-                messages=[
-                    {
-                        "role": "system",
-                        "content": """You are an expert OCR system for government grievance documents in India.
-Your task is DEEP OCR with ENGLISH NORMALIZATION.
-
-CRITICAL INSTRUCTIONS:
-1. The document may contain MIXED LANGUAGES (Hindi, Telugu, Tamil, English mixed together)
-2. You MUST identify and extract ALL entities regardless of script
-3. ALL OUTPUT FIELDS MUST BE IN ENGLISH - transliterate/translate everything
-
-ENTITY EXTRACTION RULES:
-- NAME: Look for "Name", "Applicant", "नाम", "పేరు", "பெயர்" etc. TRANSLITERATE to English (e.g., "राम कुमार" → "Ram Kumar")
-- AREA: Look for "Mandal", "Village", "Ward", "मंडल", "गांव", "మండలం", "గ్రామం". TRANSLITERATE accurately (e.g., "अल्वाल" → "Alwal")
-- CONTACT: Extract any 10-digit phone numbers
-- CATEGORY: Map to official English categories only
-- DESCRIPTION: Read entire content in any language, summarize in CLEAR ENGLISH
-
-OFFICIAL CATEGORIES (pick one):
-Water & Irrigation, Agriculture, Health & Sanitation, Education, Infrastructure & Roads, 
-Law & Order, Welfare Schemes, Electricity, Forests & Environment, Finance & Taxation, 
-Urban & Rural Development, Miscellaneous"""
-                    },
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": """Perform DEEP OCR on this document/image.
+        # Use direct OpenAI SDK for vision (more reliable than LiteLLM for images)
+        from openai import AsyncOpenAI
+        
+        # Use Emergent's OpenAI-compatible endpoint
+        client = AsyncOpenAI(api_key=EMERGENT_LLM_KEY)
+        
+        ocr_prompt = """Perform DEEP OCR on this document/image.
 
 EXTRACT and NORMALIZE TO ENGLISH:
 1. Name (transliterate from any script to English)
 2. Contact Number (10 digits if found)
 3. Area/Location (transliterate Mandal/Village/Ward names to English)
-4. Issue Category (MUST be from official English list)
+4. Issue Category (MUST be from: Water & Irrigation, Agriculture, Health & Sanitation, Education, Infrastructure & Roads, Law & Order, Welfare Schemes, Electricity, Forests & Environment, Finance & Taxation, Urban & Rural Development, Miscellaneous)
 5. Issue Description (translate/summarize in English)
 6. Original Document Language
 
@@ -380,38 +345,48 @@ Return JSON only (no markdown):
     "contact": "phone number or null",
     "area": "English transliterated area name or null",
     "category": "Official English category",
-    "description": "English description/summary",
+    "description": "English description/summary of the issue",
     "language": "original language code (en/te/hi/ta)"
 }"""
-                            },
-                            {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:{content_type};base64,{media_base64}"
-                                }
+
+        response = await client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {
+                    "role": "system",
+                    "content": """You are an expert OCR system for government grievance documents in India.
+Your task is DEEP OCR with ENGLISH NORMALIZATION.
+
+CRITICAL INSTRUCTIONS:
+1. The document may contain MIXED LANGUAGES (Hindi, Telugu, Tamil, English mixed together)
+2. You MUST identify and extract ALL entities regardless of script
+3. ALL OUTPUT FIELDS MUST BE IN ENGLISH - transliterate/translate everything
+
+ENTITY EXTRACTION RULES:
+- NAME: Look for "Name", "Applicant", "नाम", "పేరు" etc. TRANSLITERATE to English
+- AREA: Look for "Mandal", "Village", "Ward" etc. TRANSLITERATE accurately
+- CONTACT: Extract any 10-digit phone numbers
+- CATEGORY: Map to official English categories only
+- DESCRIPTION: Read entire content, summarize in CLEAR ENGLISH"""
+                },
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": ocr_prompt},
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:{content_type};base64,{media_base64}"
                             }
-                        ]
-                    }
-                ],
-                max_tokens=1000,
-                temperature=0.2
-            )
-            
-            result = response.choices[0].message.content
-        else:
-            # For PDFs, use the LlmChat wrapper
-            chat = LlmChat(
-                api_key=EMERGENT_LLM_KEY,
-                session_id=f"deep-ocr-{uuid.uuid4()}",
-                system_message="""You are an expert OCR system. Extract text and summarize in English."""
-            ).with_model("openai", "gpt-4o")
-            
-            msg = UserMessage(
-                text="Extract all text from this PDF and provide a summary.",
-                file_contents=[FileContent(content_type=content_type, file_content_base64=media_base64)]
-            )
-            result = await chat.send_message(msg)
+                        }
+                    ]
+                }
+            ],
+            max_tokens=1000,
+            temperature=0.2
+        )
         
+        result = response.choices[0].message.content
         clean_result = result.replace('```json', '').replace('```', '').strip()
         extracted = json.loads(clean_result)
         
@@ -422,6 +397,10 @@ Return JSON only (no markdown):
         print(f"✅ OCR extraction successful: {extracted.get('description', '')[:100]}...")
         return extracted
         
+    except json.JSONDecodeError as je:
+        print(f"❌ OCR JSON parse error: {je}")
+        print(f"Raw response: {result[:500] if 'result' in dir() else 'No result'}")
+        return None
     except Exception as e:
         print(f"❌ Deep OCR extraction error: {e}")
         import traceback
