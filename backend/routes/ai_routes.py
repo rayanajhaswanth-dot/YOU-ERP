@@ -698,18 +698,26 @@ OUTPUT FORMAT (JSON only, no markdown):
 
 @router.post("/transcribe")
 async def transcribe_endpoint(
-    file: UploadFile = File(...),
+    file: UploadFile = File(None),
+    audio: UploadFile = File(None),
     current_user: TokenData = Depends(get_current_user)
 ):
     """
     Transcribe audio file (supports WebM from web frontend and OGG from WhatsApp).
+    Accepts both 'file' and 'audio' form field names for flexibility.
     Returns original text, detected language, and English translation if needed.
     """
+    # Accept either 'file' or 'audio' field name
+    upload_file = file or audio
+    if not upload_file:
+        raise HTTPException(status_code=400, detail="No audio file provided. Use 'file' or 'audio' field.")
+    
     try:
-        content = await file.read()
-        content_type = file.content_type or "audio/webm"
+        content = await upload_file.read()
+        content_type = upload_file.content_type or "audio/webm"
         
-        # Handle web frontend audio (audio field name)
+        print(f"🎤 Transcribe request: {len(content)} bytes, type: {content_type}")
+        
         transcript = await transcribe_audio(content, content_type)
         
         if transcript:
