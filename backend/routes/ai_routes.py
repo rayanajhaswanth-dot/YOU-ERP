@@ -229,10 +229,16 @@ STRICT INSTRUCTIONS:
         
     except Exception as e:
         print(f"❌ OSD Brain Error: {e}")
+        # Return response in detected language
+        if detected_lang == 'en':
+            fallback_reply = "Hello. I am here to help you. How may I assist you today?"
+        else:
+            fallback_reply = "Namaste. Main aapki seva mein hoon. Kaise madad kar sakta hoon?"
+        
         return {
             "intent": "CHAT",
             "detected_language": detected_lang,
-            "reply": "Namaste. Main aapki seva mein hoon. Kaise madad kar sakta hoon?",
+            "reply": fallback_reply,
             "grievance_data": None
         }
 
