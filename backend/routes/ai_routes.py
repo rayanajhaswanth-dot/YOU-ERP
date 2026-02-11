@@ -733,7 +733,7 @@ async def transcribe_endpoint(
             if detected_lang != 'en':
                 try:
                     english_translation = await translate_text(transcript, 'en')
-                except:
+                except Exception:
                     english_translation = transcript
             
             return {
