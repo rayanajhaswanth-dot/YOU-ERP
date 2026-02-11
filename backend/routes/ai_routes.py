@@ -271,27 +271,66 @@ STRICT INSTRUCTIONS:
 # ==============================================================================
 
 async def translate_text(text: str, target_lang: str) -> str:
-    """Translate admin messages (like 'Resolved') into user's native language"""
-    if target_lang == 'en':
+    """
+    GOLD STANDARD TRANSLATION
+    
+    Translate text to target language with STRICT fallback to English.
+    Only translates to KNOWN Indian languages - never random languages.
+    """
+    # Strict language code mapping
+    SUPPORTED_LANGUAGES = {
+        'en': 'English',
+        'hi': 'Hindi', 
+        'hinglish': 'Hindi (Hinglish - Roman script)',
+        'te': 'Telugu',
+        'tenglish': 'Telugu (Tenglish - Roman script)',
+        'ta': 'Tamil',
+        'kn': 'Kannada', 
+        'ml': 'Malayalam', 
+        'bn': 'Bengali',
+        'mr': 'Marathi',
+        'gu': 'Gujarati',
+        'pa': 'Punjabi'
+    }
+    
+    # If language is English or not in supported list, return original English
+    if target_lang == 'en' or target_lang not in SUPPORTED_LANGUAGES:
+        print(f"📝 [Translation] Keeping English (target was: {target_lang})")
         return text
     
-    lang_names = {
-        'te': 'Telugu', 'hi': 'Hindi', 'ta': 'Tamil',
-        'kn': 'Kannada', 'ml': 'Malayalam', 'bn': 'Bengali'
-    }
-    target_name = lang_names.get(target_lang, 'the local language')
+    target_name = SUPPORTED_LANGUAGES[target_lang]
     
     try:
         chat = LlmChat(
             api_key=EMERGENT_LLM_KEY,
             session_id=f"translate-{uuid.uuid4()}",
-            system_message=f"You are a professional translator. Translate the given text to {target_name}. Keep it formal and respectful. Only return the translated text."
+            system_message=f"""You are a professional translator specializing in Indian languages.
+            
+STRICT RULES:
+1. Translate the given text to {target_name} ONLY
+2. Use formal, respectful language
+3. If translating to Hinglish/Tenglish, use Roman script (not Devanagari/Telugu script)
+4. NEVER translate to any European language (French, Spanish, German, Romanian, etc.)
+5. Return ONLY the translated text, nothing else"""
         ).with_model("gemini", "gemini-2.0-flash")
         
-        result = await chat.send_message(UserMessage(text=f"Translate: {text}"))
+        result = await chat.send_message(UserMessage(text=f"Translate this to {target_name}: {text}"))
+        
+        # Safety check - if response contains foreign language markers, return English
+        foreign_markers = ['je suis', 'nous', 'vous', 'gracias', 'merci', 'bonjour', 'hola', 
+                         'danke', 'bitte', 'constatat', 'nemulțumirea', 'înregistrat', 'dumneavoastră']
+        response_lower = result.lower()
+        
+        for marker in foreign_markers:
+            if marker in response_lower:
+                print(f"⚠️ [Translation] Foreign language detected in response! Returning English.")
+                return text
+        
+        print(f"✅ [Translation] Translated to {target_name}")
         return result.strip()
+        
     except Exception as e:
-        print(f"⚠️ Translation failed: {e}")
+        print(f"⚠️ [Translation] Failed: {e}. Returning English.")
         return text
 
 
