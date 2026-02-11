@@ -298,21 +298,43 @@ async def extract_grievance_from_media(media_data: bytes, media_type: str) -> Di
     """
     HIGH-PRECISION "Deep OCR" extraction for PDF/Image.
     Handles mixed languages (Hindi name, English description) and normalizes ALL fields to English.
+    
+    CTO CODE RED FIX: Use proper image_url format for OpenAI Vision API.
     """
     try:
         media_base64 = base64.b64encode(media_data).decode('utf-8')
         
+        # Determine correct MIME type for the Vision API
         if 'pdf' in media_type.lower():
+            # PDFs need special handling - convert first page to image
+            print("📄 PDF detected - using PDF extraction mode")
             content_type = "application/pdf"
         elif 'png' in media_type.lower():
             content_type = "image/png"
+        elif 'gif' in media_type.lower():
+            content_type = "image/gif"
+        elif 'webp' in media_type.lower():
+            content_type = "image/webp"
         else:
             content_type = "image/jpeg"
         
-        chat = LlmChat(
-            api_key=EMERGENT_LLM_KEY,
-            session_id=f"deep-ocr-{uuid.uuid4()}",
-            system_message="""You are an expert OCR system for government grievance documents in India.
+        print(f"📎 Processing media: type={content_type}, size={len(media_data)} bytes")
+        
+        # For images, use direct OpenAI Vision API format which is more reliable
+        if content_type.startswith('image/'):
+            from openai import AsyncOpenAI
+            
+            client = AsyncOpenAI(
+                api_key=EMERGENT_LLM_KEY,
+                base_url="https://emergent-z1k3lu-v2.openai.azure.com/"
+            )
+            
+            response = await client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": """You are an expert OCR system for government grievance documents in India.
 Your task is DEEP OCR with ENGLISH NORMALIZATION.
 
 CRITICAL INSTRUCTIONS:
@@ -322,7 +344,7 @@ CRITICAL INSTRUCTIONS:
 
 ENTITY EXTRACTION RULES:
 - NAME: Look for "Name", "Applicant", "नाम", "పేరు", "பெயர்" etc. TRANSLITERATE to English (e.g., "राम कुमार" → "Ram Kumar")
-- AREA: Look for "Mandal", "Village", "Ward", "मंडल", "गांव", "మండలం", "గ్రామం". TRANSLITERATE accurately (e.g., "అల్వాల్" → "Alwal")
+- AREA: Look for "Mandal", "Village", "Ward", "मंडल", "गांव", "మండలం", "గ్రామం". TRANSLITERATE accurately (e.g., "अल्वाल" → "Alwal")
 - CONTACT: Extract any 10-digit phone numbers
 - CATEGORY: Map to official English categories only
 - DESCRIPTION: Read entire content in any language, summarize in CLEAR ENGLISH
@@ -331,9 +353,13 @@ OFFICIAL CATEGORIES (pick one):
 Water & Irrigation, Agriculture, Health & Sanitation, Education, Infrastructure & Roads, 
 Law & Order, Welfare Schemes, Electricity, Forests & Environment, Finance & Taxation, 
 Urban & Rural Development, Miscellaneous"""
-        ).with_model("openai", "gpt-4o")
-        
-        prompt = """Perform DEEP OCR on this document/image.
+                    },
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": """Perform DEEP OCR on this document/image.
 
 EXTRACT and NORMALIZE TO ENGLISH:
 1. Name (transliterate from any script to English)
@@ -352,9 +378,34 @@ Return JSON only (no markdown):
     "description": "English description/summary",
     "language": "original language code (en/te/hi/ta)"
 }"""
-        
-        msg = UserMessage(text=prompt, file_contents=[FileContent(content_type=content_type, file_content_base64=media_base64)])
-        result = await chat.send_message(msg)
+                            },
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:{content_type};base64,{media_base64}"
+                                }
+                            }
+                        ]
+                    }
+                ],
+                max_tokens=1000,
+                temperature=0.2
+            )
+            
+            result = response.choices[0].message.content
+        else:
+            # For PDFs, use the LlmChat wrapper
+            chat = LlmChat(
+                api_key=EMERGENT_LLM_KEY,
+                session_id=f"deep-ocr-{uuid.uuid4()}",
+                system_message="""You are an expert OCR system. Extract text and summarize in English."""
+            ).with_model("openai", "gpt-4o")
+            
+            msg = UserMessage(
+                text="Extract all text from this PDF and provide a summary.",
+                file_contents=[FileContent(content_type=content_type, file_content_base64=media_base64)]
+            )
+            result = await chat.send_message(msg)
         
         clean_result = result.replace('```json', '').replace('```', '').strip()
         extracted = json.loads(clean_result)
@@ -363,10 +414,13 @@ Return JSON only (no markdown):
         if extracted.get('category') not in OFFICIAL_CATEGORIES:
             extracted['category'] = map_to_official_category(extracted.get('category', ''))
         
+        print(f"✅ OCR extraction successful: {extracted.get('description', '')[:100]}...")
         return extracted
         
     except Exception as e:
         print(f"❌ Deep OCR extraction error: {e}")
+        import traceback
+        traceback.print_exc()
         return None
 
 
