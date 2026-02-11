@@ -5,92 +5,89 @@ A production-ready SaaS platform for Indian political leaders featuring AI-power
 
 ## Changelog
 
-### 2026-02-11 (CTO CODE RED - Critical Bug Fixes)
+### 2026-02-11 (CTO CODE RED - GOLD STANDARD SOLUTION)
 
-**ROOT CAUSE ANALYSIS:**
+**ROOT CAUSE IDENTIFIED:**
+```
+openai.AuthenticationError: Error code: 401 - Incorrect API key provided: sk-emerg***
+```
+The **Emergent LLM Key** is NOT a standard OpenAI API key. It only works with the `emergentintegrations` library, NOT with direct OpenAI SDK calls.
 
-| Issue | Root Cause | Fix Applied |
-|-------|------------|-------------|
-| **Voice Note Failure** | FFmpeg not installed + Whisper API doesn't support OGG format | ✅ Installed FFmpeg, code converts OGG→MP3 before transcription |
-| **Image Processing Failure** | LiteLLM wrapper rejecting image MIME types | ✅ Switched to direct OpenAI SDK for Vision API calls |
-| **Language Inconsistency** | `detect_language()` only detected Indic scripts, not Hinglish | ✅ Added Hinglish keyword detection |
+**GOLD STANDARD SOLUTION IMPLEMENTED:**
 
-**Critical Fixes Implemented:**
+| Component | Previous (Broken) | New (Fixed) |
+|-----------|------------------|-------------|
+| **Image OCR** | Direct OpenAI SDK with `AsyncOpenAI` | Gemini Vision via `emergentintegrations` |
+| **Model** | `gpt-4o` (auth failed) | `gemini-2.0-flash` (working) |
+| **Image Format** | `image_url` dict format | `ImageContent(image_base64=...)` |
 
-#### 1. Voice Transcription (FIXED)
-- **Problem**: `[Errno 2] No such file or directory: 'ffmpeg'` and `Unsupported file format: ogg`
-- **Fix**: 
-  - Installed FFmpeg: `apt-get install ffmpeg`
-  - Code converts OGG/OPUS → MP3 before sending to Whisper
-  - File: `ai_routes.py` - `transcribe_audio()` function
+**Code Changes:**
+```python
+# OLD (BROKEN) - Direct OpenAI SDK doesn't accept Emergent key
+from openai import AsyncOpenAI
+client = AsyncOpenAI(api_key=EMERGENT_LLM_KEY)  # ❌ 401 Auth Error
 
-#### 2. Image/Document OCR (FIXED)
-- **Problem**: `Invalid file data... Expected application/pdf MIME type... but got unsupported MIME type 'image/jpeg'`
-- **Fix**: 
-  - Replaced LlmChat FileContent with direct OpenAI AsyncClient
-  - Uses proper `image_url` format: `data:image/jpeg;base64,{base64_data}`
-  - File: `ai_routes.py` - `extract_grievance_from_media()` function
-
-#### 3. Language Consistency (FIXED)
-- **Problem**: Bot responding in Hindi when user writes in English
-- **Fix**:
-  - Added Hinglish keyword detection (mera, nahi, kya, hai, etc.)
-  - System prompt now explicitly instructs: "If detected_lang is 'en' → Reply ONLY in English"
-  - Language is passed directly to the prompt: `CURRENT USER'S LANGUAGE: {detected_lang}`
-  - File: `ai_routes.py` - `detect_language()` and `analyze_incoming_message()`
+# NEW (WORKING) - Use emergentintegrations with Gemini Vision
+from emergentintegrations.llm.chat import ImageContent
+image_content = ImageContent(image_base64=media_base64)
+chat = LlmChat(api_key=EMERGENT_LLM_KEY, ...).with_model("gemini", "gemini-2.0-flash")
+msg = UserMessage(text=prompt, file_contents=[image_content])
+result = await chat.send_message(msg)  # ✅ Works!
+```
 
 **Test Results:**
-- ✅ English input → English response
-- ✅ Hinglish input → Hinglish response  
-- ✅ Hindi (Devanagari) input → Hindi response
-- ✅ FFmpeg installed and working
-- ✅ Vision API using correct format
+```
+✅ PNG Image OCR: Name=Rahul Kumar, Phone=9876543210, Category=Infrastructure & Roads
+✅ JPEG Image OCR: Name=Mohan Singh, Phone=8765432109, Category=Water & Irrigation
+✅ /api/ai/extract_from_media - Working
+✅ /api/ai/analyze_image - Working
+✅ /api/grievances/analyze-grievance - Working
+```
 
-**Bot Version:** 4.0 - Holistic Knowledge + Vision Analysis
+**Files Updated:**
+- `backend/routes/ai_routes.py`:
+  - `extract_grievance_from_media()` - Now uses Gemini Vision with ImageContent
+  - `process_image_with_vision()` - Now uses Gemini Vision with ImageContent
+  - Both functions log with `[GOLD STANDARD OCR]` prefix
+
+**Bot Version:** 4.0 - Holistic Knowledge + Gemini Vision
 
 ### Previous Updates
-- 2026-02-11: Draconian OSD Prompt, safeFetch wrapper, file input fixes
+- 2026-02-11: FFmpeg installed, Hinglish detection added, language consistency fixed
 - 2026-02-06: OSD Persona v3.5 with Iron Dome language protection
-- 2026-02-06: CTO Mandate - Media extraction, language detection, category normalization
 
 ## Tech Stack
 - **Frontend**: React + TailwindCSS + Recharts + Shadcn UI
 - **Backend**: FastAPI (Python)
 - **Database**: Supabase (PostgreSQL)
-- **AI**: OpenAI GPT-4o/GPT-4o-mini (via Emergent LLM Key), Whisper for voice
+- **AI Vision**: **Gemini 2.0 Flash** via Emergent LLM Key
+- **AI Text**: GPT-4o-mini via Emergent LLM Key
+- **Audio**: OpenAI Whisper-1 via emergentintegrations
 - **Messaging**: Twilio WhatsApp API
 - **Media Processing**: FFmpeg for audio conversion
 
 ## Key API Endpoints
 
-### AI Routes
+### AI Routes (Image Processing)
+- `POST /api/ai/extract_from_media` - OCR extraction from image/PDF
+- `POST /api/ai/analyze_image` - Dedicated image analysis
+- `POST /api/grievances/analyze-grievance` - Grievance file analysis
+
+### AI Routes (Text/Voice)
 - `POST /api/ai/analyze_intent` - OSD Brain with language-aware responses
 - `POST /api/ai/transcribe` - Audio transcription (OGG, WebM, MP3)
-- `POST /api/ai/extract_from_media` - Image/PDF OCR extraction
-
-### WhatsApp Routes
-- `POST /api/whatsapp/webhook` - Main webhook (handles text, voice, image)
-- `GET /api/whatsapp/status` - Version 4.0 status
-
-## Language Detection Logic
-```
-1. Check for Indic scripts (Devanagari, Telugu, Tamil, etc.)
-2. If Roman script, check for Hinglish keywords
-3. Default to English
-```
 
 ## Test Credentials
 - Email: `ramkumar@example.com`
 - Password: `test123`
 
 ## Pending User Verification
-- [ ] **Voice Note**: Send a voice note via WhatsApp to verify transcription works
-- [ ] **Image OCR**: Send a handwritten document via WhatsApp to verify OCR works
+- [ ] **WhatsApp Voice Note**: Send a voice note to verify transcription
+- [ ] **WhatsApp Image**: Send a document image to verify WhatsApp OCR path
 
 ## Completed Tasks
-- [x] Voice transcription fix (FFmpeg + format conversion)
-- [x] Image OCR fix (Direct OpenAI Vision API)
-- [x] Language detection fix (Hinglish support)
+- [x] **Image OCR (GOLD STANDARD)** - Using Gemini Vision via emergentintegrations
+- [x] Voice transcription fix (FFmpeg installed)
+- [x] Language detection fix (Hinglish support added)
 - [x] English response for English input
-- [x] Holistic Knowledge system
-- [x] safeFetch wrapper for frontend
+- [x] All image processing endpoints working
