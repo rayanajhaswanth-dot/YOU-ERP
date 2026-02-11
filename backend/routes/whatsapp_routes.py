@@ -459,23 +459,67 @@ async def update_latest_grievance_rating(phone: str, rating: int, supabase):
         print(f"⚠️ Could not update rating: {e}")
 
 
-async def get_osd_response(response_type: str, language: str) -> str:
-    """Get OSD-style response in user's language"""
+async def get_osd_response(response_type: str, language: str, name: str = None, **kwargs) -> str:
+    """
+    Get warm, citizen-friendly OSD-style response in user's language.
+    
+    CTO-approved message templates for professional yet empathetic communication.
+    """
+    from routes.ai_routes import translate_text
+    
+    # Citizen-friendly message templates
     responses = {
+        # Warm greeting message
+        "greeting": f"""Namaste{', ' + name if name else ''}.
+Thank you for reaching out to the Office of the Leader. We truly appreciate you taking the time to connect with us.
+
+We are here to support you. You may share your query or register a grievance, and our team will carefully look into the matter and assist you as soon as possible.""",
+        
+        # Chat/general response
         "chat_default": "I'm here to assist you. How may I help you today?",
+        
+        # Query assistance
         "query_default": "I'd be happy to help with information. Could you please specify which scheme or process you'd like to know about?",
+        
+        # Feedback thanks
         "feedback_thanks": "Thank you for your valuable feedback. We are committed to serving you better.",
-        "voice_error": "I received your voice message but could not process it. Please try again or type your message.",
+        
+        # Voice error
+        "voice_error": "I received your voice message but could not process it clearly. Please try again or type your message.",
+        
+        # Media error
         "media_error": "I received your document but could not extract the information. Please describe your issue in text.",
+        
+        # Clarification needed
         "clarification": "I'm here to help. Could you please provide more details about your concern?",
+        
+        # Status check - no grievance found
+        "no_grievance": "I could not find any recent grievance registered with your number. Would you like to register a new one?",
     }
     
     base_msg = responses.get(response_type, responses["chat_default"])
     
-    if language != 'en':
+    # Translate to user's language if not English
+    if language and language != 'en':
         return await translate_text(base_msg, language)
     
     return base_msg
+
+
+def get_grievance_confirmation_message(ticket_id: str, category: str, description: str) -> str:
+    """
+    Generate the grievance registration confirmation message.
+    This is the CTO-approved warm, reassuring template.
+    """
+    return f"""Your grievance has been successfully registered. Please find the details below:
+
+📋 Issue Category: {category}
+📝 Issue Type: {description[:100]}{'...' if len(description) > 100 else ''}
+🎫 Ticket Number: #{ticket_id}
+
+Thank you for bringing this to our attention. We understand that your concern is important, and our team will review it with care.
+
+Please stay connected for updates. We are committed to keeping you informed throughout the process."""
 
 
 # ==============================================================================
