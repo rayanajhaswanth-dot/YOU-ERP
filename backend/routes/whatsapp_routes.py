@@ -344,10 +344,14 @@ async def register_grievance_osd(phone: str, name: str, area: str, category: str
         if result.data:
             ticket_id = str(result.data[0]['id'])[:8].upper()
             
-            # Confirmation message - ENGLISH first
-            base_msg = f"I have noted your grievance and registered it with Ticket #{ticket_id}. I am forwarding this to the concerned department immediately. You will receive updates on WhatsApp."
+            # Use the CTO-approved warm confirmation message
+            base_msg = get_grievance_confirmation_message(
+                ticket_id=ticket_id,
+                category=category,
+                description=description
+            )
             
-            # Only translate if language is a KNOWN Indian language (not 'en')
+            # Translate if language is a KNOWN Indian language (not 'en')
             if language in ['hi', 'hinglish', 'te', 'tenglish', 'ta', 'kn', 'ml', 'bn', 'mr', 'gu', 'pa']:
                 response = await translate_text(base_msg, language)
                 
@@ -365,7 +369,7 @@ async def register_grievance_osd(phone: str, name: str, area: str, category: str
             else:
                 response = base_msg
             
-            return f"✅ {response}"
+            return response
             
     except Exception as e:
         print(f"❌ Registration error: {e}")
