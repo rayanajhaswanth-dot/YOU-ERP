@@ -196,13 +196,14 @@ You have knowledge of ALL Indian government schemes across all 28 States + 8 Uni
         prompt = f"""Analyze this message from an Indian citizen:
 
 MESSAGE: "{text}"
+DETECTED LANGUAGE: {detected_lang}
 
-INSTRUCTIONS:
-1. "Tu/Mera/De/Se/Me" = HINDI context, NOT French/Spanish
-2. Mirror user's language/script
+STRICT INSTRUCTIONS:
+1. Respond in the SAME language as the user: {detected_lang}
+2. If {detected_lang} is 'en' → Your reply MUST be in English ONLY
 3. If asking about ANY scheme/service, provide the ACTUAL .gov.in link
-4. Keep response SHORT (WhatsApp optimized, under 300 chars)
-5. NO foreign languages"""
+4. Keep response SHORT (under 300 chars for WhatsApp)
+5. NO French, Spanish, German - ONLY Indian languages"""
 
         result = await chat.send_message(UserMessage(text=prompt))
         clean_result = result.replace('```json', '').replace('```', '').strip()
