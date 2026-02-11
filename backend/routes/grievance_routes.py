@@ -350,7 +350,7 @@ async def resolve_grievance(
     except Exception as e:
         # If resolved_at column doesn't exist, update without it
         if 'resolved_at' in str(e):
-            print(f"⚠️ resolved_at column not in schema, updating status only")
+            print("⚠️ resolved_at column not in schema, updating status only")
             supabase.table('grievances').update(update_data).eq('id', grievance_id).execute()
         else:
             raise
