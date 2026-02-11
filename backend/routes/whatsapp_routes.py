@@ -344,11 +344,24 @@ async def register_grievance_osd(phone: str, name: str, area: str, category: str
         if result.data:
             ticket_id = str(result.data[0]['id'])[:8].upper()
             
-            # Confirmation message in user's native language
+            # Confirmation message - ENGLISH first
             base_msg = f"I have noted your grievance and registered it with Ticket #{ticket_id}. I am forwarding this to the concerned department immediately. You will receive updates on WhatsApp."
             
-            if language != 'en':
+            # Only translate if language is a KNOWN Indian language (not 'en')
+            if language in ['hi', 'hinglish', 'te', 'tenglish', 'ta', 'kn', 'ml', 'bn', 'mr', 'gu', 'pa']:
                 response = await translate_text(base_msg, language)
+                
+                # SAFETY CHECK: If response contains foreign language, use English
+                foreign_markers = ['constatat', 'nemulțumirea', 'înregistrat', 'dumneavoastră', 
+                                  'je suis', 'nous', 'vous', 'merci', 'bonjour', 
+                                  'gracias', 'hola', 'danke', 'bitte']
+                response_lower = response.lower()
+                
+                for marker in foreign_markers:
+                    if marker in response_lower:
+                        print(f"⚠️ [Registration] Foreign language detected in response! Using English.")
+                        response = base_msg
+                        break
             else:
                 response = base_msg
             
