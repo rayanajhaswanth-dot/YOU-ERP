@@ -680,50 +680,49 @@ async def process_image_with_vision(image_data: bytes, content_type: str) -> Dic
     try:
         image_base64 = base64.b64encode(image_data).decode('utf-8')
         
+        # Use ImageContent for proper image handling with emergentintegrations
+        from emergentintegrations.llm.chat import ImageContent
+        
+        image_content = ImageContent(image_base64=image_base64)
+        
         chat = LlmChat(
             api_key=EMERGENT_LLM_KEY,
             session_id=f"vision-analysis-{uuid.uuid4()}",
             system_message="""You are an expert document analyzer for Indian government grievance systems.
-Your task is to extract grievance information from images with HIGH PRECISION.
+Extract grievance information from images with HIGH PRECISION.
 
 EXTRACTION RULES:
-1. **Name**: Look for applicant name, petitioner name, or any name field. Transliterate to English if in other scripts.
-2. **Contact**: Extract 10-digit Indian phone numbers (starting with 6,7,8,9)
-3. **Area**: Look for Mandal, Village, Town, Ward, District names. Transliterate accurately.
-4. **Category**: Map the issue to one of these EXACT categories:
-   - Water & Irrigation, Agriculture, Forests & Environment
-   - Health & Sanitation, Education, Infrastructure & Roads
-   - Law & Order, Welfare Schemes, Finance & Taxation
-   - Urban & Rural Development, Electricity, Miscellaneous
-5. **Description**: Summarize the grievance/issue in clear English (max 200 words)
-6. **Urgency**: Detect if it's an emergency (CRITICAL) or routine matter
+1. **Name**: Transliterate to English if in other scripts
+2. **Contact**: Extract 10-digit Indian phone numbers
+3. **Area**: Transliterate Mandal/Village/District names to English
+4. **Category**: Use official categories only
+5. **Description**: Summarize in clear English
+6. **Urgency**: CRITICAL/HIGH/MEDIUM/LOW
 
-VISUAL ANALYSIS:
-- If image shows damaged infrastructure (road, bridge, building) → Infrastructure & Roads
-- If image shows water logging, dry taps, dirty water → Water & Irrigation
-- If image shows garbage, open drains, health hazard → Health & Sanitation
-- If image shows broken power lines, transformer → Electricity
-- If image shows documents/forms → Extract text content
+OFFICIAL CATEGORIES:
+Water & Irrigation, Agriculture, Forests & Environment, Health & Sanitation, 
+Education, Infrastructure & Roads, Law & Order, Welfare Schemes, 
+Finance & Taxation, Urban & Rural Development, Electricity, Miscellaneous
 
-OUTPUT FORMAT (JSON only, no markdown):
-{
-    "name": "English transliterated name or null",
-    "contact": "10-digit phone or null",
-    "area": "Location/Village/Mandal name or null",
-    "category": "One of the 12 official categories",
-    "description": "Clear English description of the issue",
-    "urgency": "CRITICAL/HIGH/MEDIUM/LOW",
-    "language": "Original language code (en/te/hi/ta/kn/ml/bn)"
-}"""
-        ).with_model("openai", "gpt-4o")
+Return ONLY valid JSON (no markdown):
+{"name": "string or null", "contact": "string or null", "area": "string or null", "category": "string", "description": "string", "urgency": "string", "language": "string"}"""
+        ).with_model("gemini", "gemini-2.0-flash")  # Gemini has excellent vision
         
         msg = UserMessage(
-            text="Analyze this image and extract grievance information. If it's a document, perform OCR. If it's a photo of an issue (road damage, water problem, etc.), describe the problem.",
-            file_contents=[FileContent(content_type=content_type, file_content_base64=image_base64)]
+            text="Analyze this image and extract grievance information. Perform OCR if it's a document. Describe the problem if it's a photo of an issue.",
+            file_contents=[image_content]
         )
         
         result = await chat.send_message(msg)
-        clean_result = result.replace('```json', '').replace('```', '').strip()
+        
+        # Clean response
+        clean_result = result.strip()
+        if clean_result.startswith('```'):
+            clean_result = clean_result.split('```')[1]
+            if clean_result.startswith('json'):
+                clean_result = clean_result[4:]
+        clean_result = clean_result.replace('```', '').strip()
+        
         extracted = json.loads(clean_result)
         
         # Ensure category is from official list
@@ -734,6 +733,8 @@ OUTPUT FORMAT (JSON only, no markdown):
         
     except Exception as e:
         print(f"❌ Vision analysis error: {e}")
+        import traceback
+        traceback.print_exc()
         return None
 
 
