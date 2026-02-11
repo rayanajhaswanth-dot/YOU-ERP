@@ -293,7 +293,18 @@ async def process_osd_conversation(phone: str, message: str, name: str, media_ur
 # ==============================================================================
 
 async def register_grievance_osd(phone: str, name: str, area: str, category: str, description: str, language: str, media_url: str, supabase) -> str:
-    """Register grievance and respond in user's native language"""
+    """
+    GOLD STANDARD REGISTRATION
+    
+    Register grievance in English and respond in user's VALID native language.
+    Falls back to English if language is unknown or unsupported.
+    """
+    
+    # Validate language code - only allow known Indian languages
+    VALID_LANGUAGES = ['en', 'hi', 'hinglish', 'te', 'tenglish', 'ta', 'kn', 'ml', 'bn', 'mr', 'gu', 'pa']
+    if language not in VALID_LANGUAGES:
+        print(f"⚠️ [Registration] Unknown language '{language}', defaulting to English")
+        language = 'en'
     
     # Get politician ID
     politicians = supabase.table('politicians').select('id').limit(1).execute()
