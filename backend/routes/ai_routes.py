@@ -696,12 +696,85 @@ async def transcribe_endpoint(
     file: UploadFile = File(...),
     current_user: TokenData = Depends(get_current_user)
 ):
-    """Transcribe audio file"""
+    """
+    Transcribe audio file (supports WebM from web frontend and OGG from WhatsApp).
+    Returns original text, detected language, and English translation if needed.
+    """
     try:
         content = await file.read()
-        transcript = await transcribe_audio(content, file.content_type or "audio/ogg")
+        content_type = file.content_type or "audio/webm"
+        
+        # Handle web frontend audio (audio field name)
+        transcript = await transcribe_audio(content, content_type)
+        
         if transcript:
-            return {"success": True, "text": transcript, "language": detect_language(transcript)}
-        raise HTTPException(status_code=500, detail="Transcription failed")
+            detected_lang = detect_language(transcript)
+            lang_name = {
+                'te': 'Telugu', 'hi': 'Hindi', 'ta': 'Tamil',
+                'kn': 'Kannada', 'ml': 'Malayalam', 'bn': 'Bengali',
+                'en': 'English'
+            }.get(detected_lang, 'Unknown')
+            
+            # Translate to English if not already English
+            english_translation = transcript
+            if detected_lang != 'en':
+                try:
+                    english_translation = await translate_text(transcript, 'en')
+                except:
+                    english_translation = transcript
+            
+            return {
+                "success": True, 
+                "text": transcript,
+                "original": transcript,
+                "language": detected_lang,
+                "language_detected": lang_name,
+                "english_translation": english_translation
+            }
+        
+        raise HTTPException(status_code=500, detail="Transcription failed - no text returned")
+    except HTTPException:
+        raise
     except Exception as e:
+        print(f"❌ Transcription endpoint error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/transcribe-audio")
+async def transcribe_audio_web_endpoint(
+    audio: UploadFile = File(...),
+    current_user: TokenData = Depends(get_current_user)
+):
+    """
+    CTO MANDATE: Endpoint for Web Frontend Voice Recorder.
+    Receives an audio blob (.webm), transcribes with Whisper.
+    This is the endpoint the VoiceRecorder.jsx calls.
+    """
+    try:
+        content = await audio.read()
+        content_type = audio.content_type or "audio/webm"
+        
+        print(f"🎤 Web audio received: {len(content)} bytes, type: {content_type}")
+        
+        transcript = await transcribe_audio(content, content_type)
+        
+        if transcript:
+            detected_lang = detect_language(transcript)
+            lang_name = {
+                'te': 'Telugu', 'hi': 'Hindi', 'ta': 'Tamil',
+                'kn': 'Kannada', 'ml': 'Malayalam', 'bn': 'Bengali',
+                'en': 'English'
+            }.get(detected_lang, 'Unknown')
+            
+            return {
+                "success": True,
+                "text": transcript,
+                "language_detected": lang_name
+            }
+        
+        raise HTTPException(status_code=500, detail="Could not transcribe audio")
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Web transcription error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
