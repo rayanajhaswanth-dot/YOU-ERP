@@ -756,13 +756,14 @@ async def analyze_image_endpoint(
 
 async def process_image_with_vision(image_data: bytes, content_type: str) -> Dict[str, Any]:
     """
-    Process image using GPT-4o Vision model for enhanced extraction.
-    This function is specifically optimized for grievance-related images.
+    GOLD STANDARD Vision Processing
+    
+    Uses Gemini Vision for image analysis with proper ImageContent format.
+    Returns data in ENGLISH for database storage.
     """
     try:
         image_base64 = base64.b64encode(image_data).decode('utf-8')
         
-        # Use ImageContent for proper image handling with emergentintegrations
         from emergentintegrations.llm.chat import ImageContent
         
         image_content = ImageContent(image_base64=image_base64)
@@ -771,27 +772,26 @@ async def process_image_with_vision(image_data: bytes, content_type: str) -> Dic
             api_key=EMERGENT_LLM_KEY,
             session_id=f"vision-analysis-{uuid.uuid4()}",
             system_message="""You are an expert document analyzer for Indian government grievance systems.
-Extract grievance information from images with HIGH PRECISION.
 
-EXTRACTION RULES:
-1. **Name**: Transliterate to English if in other scripts
-2. **Contact**: Extract 10-digit Indian phone numbers
-3. **Area**: Transliterate Mandal/Village/District names to English
-4. **Category**: Use official categories only
-5. **Description**: Summarize in clear English
-6. **Urgency**: CRITICAL/HIGH/MEDIUM/LOW
+TASK: Extract grievance information in ENGLISH.
+
+RULES:
+1. Transliterate all names/places to English
+2. Use official English categories
+3. Describe issues in clear English
+4. Return valid language codes only: en/hi/hinglish/te/ta/kn/ml/bn
 
 OFFICIAL CATEGORIES:
 Water & Irrigation, Agriculture, Forests & Environment, Health & Sanitation, 
 Education, Infrastructure & Roads, Law & Order, Welfare Schemes, 
-Finance & Taxation, Urban & Rural Development, Electricity, Miscellaneous
-
-Return ONLY valid JSON (no markdown):
-{"name": "string or null", "contact": "string or null", "area": "string or null", "category": "string", "description": "string", "urgency": "string", "language": "string"}"""
-        ).with_model("gemini", "gemini-2.0-flash")  # Gemini has excellent vision
+Finance & Taxation, Urban & Rural Development, Electricity, Miscellaneous"""
+        ).with_model("gemini", "gemini-2.0-flash")
         
         msg = UserMessage(
-            text="Analyze this image and extract grievance information. Perform OCR if it's a document. Describe the problem if it's a photo of an issue.",
+            text="""Analyze this image and extract grievance information in ENGLISH.
+
+Return ONLY valid JSON (no markdown):
+{"name": "string or null", "contact": "string or null", "area": "string or null", "category": "string", "description": "string in ENGLISH", "urgency": "CRITICAL/HIGH/MEDIUM/LOW", "language": "en/hi/hinglish/te/ta/kn/ml/bn"}""",
             file_contents=[image_content]
         )
         
@@ -810,6 +810,11 @@ Return ONLY valid JSON (no markdown):
         # Ensure category is from official list
         if extracted.get('category') not in OFFICIAL_CATEGORIES:
             extracted['category'] = map_to_official_category(extracted.get('category', ''))
+        
+        # Normalize language code
+        valid_langs = ['en', 'hi', 'hinglish', 'te', 'tenglish', 'ta', 'kn', 'ml', 'bn', 'mr', 'gu', 'pa']
+        if extracted.get('language') not in valid_langs:
+            extracted['language'] = 'en'
         
         return extracted
         
