@@ -340,74 +340,114 @@ STRICT RULES:
 
 async def extract_grievance_from_media(media_data: bytes, media_type: str) -> Dict[str, Any]:
     """
-    GOLD STANDARD SOLUTION - CTO CODE RED
+    GOLD STANDARD OCR SOLUTION - CTO CODE RED v2
     
-    Uses Gemini Vision via emergentintegrations library for reliable image OCR.
-    This bypasses the OpenAI direct API issues with Emergent LLM Key.
+    Extracts grievance info from images and PDFs.
+    - Images: Direct Gemini Vision OCR
+    - PDFs: Convert first page to image, then OCR
+    
+    ALL OUTPUT IS IN ENGLISH for database storage.
     """
     try:
-        media_base64 = base64.b64encode(media_data).decode('utf-8')
+        # Determine content type
+        is_pdf = 'pdf' in media_type.lower()
         
-        # Determine correct MIME type
-        if 'pdf' in media_type.lower():
-            content_type = "application/pdf"
-        elif 'png' in media_type.lower():
-            content_type = "image/png"
-        elif 'gif' in media_type.lower():
-            content_type = "image/gif"
-        elif 'webp' in media_type.lower():
-            content_type = "image/webp"
+        if is_pdf:
+            # Convert PDF first page to image
+            print(f"📄 [GOLD STANDARD OCR] PDF detected, converting first page to image...")
+            try:
+                import fitz  # PyMuPDF
+                pdf_doc = fitz.open(stream=media_data, filetype="pdf")
+                page = pdf_doc[0]  # First page
+                pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))  # 2x zoom for better OCR
+                image_data = pix.tobytes("png")
+                content_type = "image/png"
+                pdf_doc.close()
+                print(f"✅ [GOLD STANDARD OCR] PDF converted to PNG: {len(image_data)} bytes")
+            except ImportError:
+                print(f"⚠️ [GOLD STANDARD OCR] PyMuPDF not installed, trying direct processing...")
+                image_data = media_data
+                content_type = "application/pdf"
+            except Exception as pdf_error:
+                print(f"⚠️ [GOLD STANDARD OCR] PDF conversion failed: {pdf_error}")
+                # Return a helpful error message
+                return {
+                    "name": None,
+                    "contact": None,
+                    "area": None,
+                    "category": "Miscellaneous",
+                    "description": "PDF document uploaded - please type the grievance details manually",
+                    "language": "en"
+                }
         else:
-            content_type = "image/jpeg"
+            image_data = media_data
+            if 'png' in media_type.lower():
+                content_type = "image/png"
+            elif 'gif' in media_type.lower():
+                content_type = "image/gif"
+            elif 'webp' in media_type.lower():
+                content_type = "image/webp"
+            else:
+                content_type = "image/jpeg"
         
-        print(f"📎 [GOLD STANDARD OCR] Processing: type={content_type}, size={len(media_data)} bytes")
+        media_base64 = base64.b64encode(image_data).decode('utf-8')
         
-        # Use ImageContent for base64 images - this is the correct way with emergentintegrations
+        print(f"📎 [GOLD STANDARD OCR] Processing: type={content_type}, size={len(image_data)} bytes")
+        
+        # Use ImageContent for proper image handling with emergentintegrations
         from emergentintegrations.llm.chat import ImageContent
         
-        # Create image content object
         image_content = ImageContent(image_base64=media_base64)
         
-        # Use Gemini Vision which has excellent image understanding
+        # Use Gemini Vision
         chat = LlmChat(
             api_key=EMERGENT_LLM_KEY,
             session_id=f"gold-ocr-{uuid.uuid4()}",
             system_message="""You are an expert OCR system for Indian government grievance documents.
 
-TASK: Deep OCR with English normalization.
+TASK: Deep OCR with ENGLISH output.
 
-RULES:
-1. Documents may contain MIXED LANGUAGES (Hindi, Telugu, Tamil, English)
+CRITICAL RULES:
+1. Documents may contain Hindi, Telugu, Tamil, English or mixed languages
 2. Extract ALL entities regardless of script
-3. ALL OUTPUT must be in ENGLISH - transliterate everything
+3. ALL OUTPUT MUST BE IN ENGLISH - translate/transliterate everything
 
 ENTITY EXTRACTION:
-- NAME: Look for "Name", "नाम", "పేరు" → Transliterate to English
-- AREA: Look for "Mandal", "Village", "गांव" → Transliterate to English  
+- NAME: Transliterate to English (राम कुमार → Ram Kumar)
+- AREA: Transliterate to English (वारंगल → Warangal)
 - CONTACT: Extract 10-digit phone numbers
-- CATEGORY: Map to official categories
-- DESCRIPTION: Summarize issue in clear English
+- CATEGORY: Use official English categories ONLY
+- DESCRIPTION: Summarize issue in clear ENGLISH
 
-OFFICIAL CATEGORIES (pick one):
+OFFICIAL CATEGORIES (pick EXACTLY one):
 Water & Irrigation, Agriculture, Health & Sanitation, Education, 
 Infrastructure & Roads, Law & Order, Welfare Schemes, Electricity,
-Forests & Environment, Finance & Taxation, Urban & Rural Development, Miscellaneous"""
-        ).with_model("gemini", "gemini-2.0-flash")  # Gemini has excellent vision capabilities
+Forests & Environment, Finance & Taxation, Urban & Rural Development, Miscellaneous
+
+LANGUAGE CODE: Return the ORIGINAL language code of the document:
+- 'en' for English
+- 'hi' for Hindi
+- 'hinglish' for Hindi in Roman script
+- 'te' for Telugu
+- 'ta' for Tamil
+- 'kn' for Kannada
+- 'ml' for Malayalam
+- 'bn' for Bengali"""
+        ).with_model("gemini", "gemini-2.0-flash")
         
         ocr_prompt = """Perform DEEP OCR on this document/image.
 
-EXTRACT and NORMALIZE TO ENGLISH:
+EXTRACT and OUTPUT IN ENGLISH:
 1. Name (transliterate to English)
 2. Contact Number (10 digits)
 3. Area/Location (transliterate to English)
-4. Issue Category (from official list)
-5. Issue Description (in English)
-6. Original Language
+4. Issue Category (from official list - in English)
+5. Issue Description (in ENGLISH - translate if needed)
+6. Original Language Code (en/hi/hinglish/te/ta/kn/ml/bn)
 
 Return ONLY valid JSON (no markdown, no backticks):
-{"name": "string or null", "contact": "string or null", "area": "string or null", "category": "string", "description": "string", "language": "string"}"""
+{"name": "string or null", "contact": "string or null", "area": "string or null", "category": "string", "description": "string in ENGLISH", "language": "en/hi/hinglish/te/ta/kn/ml/bn"}"""
         
-        # Send message with image
         msg = UserMessage(text=ocr_prompt, file_contents=[image_content])
         result = await chat.send_message(msg)
         
@@ -415,7 +455,6 @@ Return ONLY valid JSON (no markdown, no backticks):
         
         # Clean and parse response
         clean_result = result.strip()
-        # Remove any markdown formatting
         if clean_result.startswith('```'):
             clean_result = clean_result.split('```')[1]
             if clean_result.startswith('json'):
@@ -428,20 +467,24 @@ Return ONLY valid JSON (no markdown, no backticks):
         if extracted.get('category') not in OFFICIAL_CATEGORIES:
             extracted['category'] = map_to_official_category(extracted.get('category', ''))
         
+        # Normalize language code
+        valid_langs = ['en', 'hi', 'hinglish', 'te', 'tenglish', 'ta', 'kn', 'ml', 'bn', 'mr', 'gu', 'pa']
+        if extracted.get('language') not in valid_langs:
+            extracted['language'] = 'en'  # Default to English for unknown
+        
         print(f"✅ [GOLD STANDARD OCR] Success: {extracted.get('description', '')[:100]}...")
         return extracted
         
     except json.JSONDecodeError as je:
         print(f"❌ [GOLD STANDARD OCR] JSON parse error: {je}")
         print(f"Raw response was: {result[:500] if 'result' in dir() else 'No result'}")
-        # Try to extract basic info even if JSON parsing fails
         return {
             "name": None,
             "contact": None,
             "area": None,
             "category": "Miscellaneous",
             "description": result[:500] if 'result' in dir() else "Could not process document",
-            "language": "unknown"
+            "language": "en"
         }
     except Exception as e:
         print(f"❌ [GOLD STANDARD OCR] Error: {e}")
