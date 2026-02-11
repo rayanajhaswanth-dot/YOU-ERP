@@ -184,7 +184,7 @@ You have knowledge of ALL Indian government schemes across all 28 States + 8 Uni
     "detected_language": "{detected_lang}",
     "reply": "Response in USER'S LANGUAGE ({detected_lang}). Include ACTUAL .gov.in LINKS.",
     "grievance_data": {{"name": null, "area": null, "category": "English", "description": "English summary"}}
-}}""""""
+}}"""
 
     try:
         chat = LlmChat(
