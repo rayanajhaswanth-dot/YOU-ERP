@@ -609,29 +609,26 @@ async def whatsapp_status():
     """Check WhatsApp bot status"""
     return {
         "status": "active",
-        "version": "4.0 - Holistic Knowledge + Vision Analysis",
+        "version": "4.2 - CTO-Approved Warm Messages",
         "features": [
+            "WARM GREETING - Citizen-friendly welcome message",
+            "GRIEVANCE CONFIRMATION - Professional registration acknowledgment",
             "HOLISTIC KNOWLEDGE - AI retrieves official URLs for ANY scheme across ALL states",
-            "IRON DOME System Prompt - Eliminates Token Overlap hallucinations",
+            "GOLD STANDARD OCR - Gemini Vision + PyMuPDF for images/PDFs",
+            "LANGUAGE SAFETY - Strict validation, no foreign languages",
             "Token Disambiguation: Tu/Mera/De/Se/Me → HINDI (not French/Spanish)",
-            "JUGAAD Safety Net - Catches foreign language in final response",
-            "VISION API - Image analysis for grievance photos using GPT-4o",
-            "PDF Deep OCR - Extract grievance data from documents",
             "Intent Classification (CHAT/GRIEVANCE/STATUS/FEEDBACK/GENERAL_QUERY)",
             "Hinglish/Tenglish Support - Mirror exact user script",
-            "Medical Domain: 108 Ambulance, Aarogyasri, PHC, CMO",
             "Voice Transcription: FFmpeg OGG→MP3 + Whisper",
-            "Category Sanitization: Sadak/Pani → Infrastructure/Water",
-            "Native Language Resolution Notifications"
+            "Category Normalization: All English for database",
+            "Native Language Response Translation"
         ],
+        "message_templates": {
+            "greeting": "Warm, citizen-friendly welcome (CTO-approved)",
+            "confirmation": "Grievance registration with ticket details"
+        },
         "intents": ["CHAT", "GRIEVANCE", "STATUS", "FEEDBACK", "GENERAL_QUERY"],
-        "supported_languages": ["English", "Hinglish (Hindi-Roman)", "Tenglish (Telugu-Roman)", "Hindi (Devanagari)", "Telugu", "Tamil", "Kannada", "Malayalam", "Bengali"],
-        "forbidden_languages": ["French", "Spanish", "German", "Portuguese"],
-        "knowledge_coverage": [
-            "All 28 States + 8 Union Territories",
-            "All Central/National schemes",
-            "Historical schemes (renamed/merged)",
-            "Emergency services (108, 100, 112)"
-        ],
+        "supported_languages": ["English", "Hinglish", "Tenglish", "Hindi", "Telugu", "Tamil", "Kannada", "Malayalam", "Bengali", "Marathi", "Gujarati", "Punjabi"],
+        "forbidden_languages": ["French", "Spanish", "German", "Portuguese", "Romanian"],
         "categories": OFFICIAL_CATEGORIES
     }
