@@ -5,64 +5,53 @@ A production-ready SaaS platform for Indian political leaders featuring AI-power
 
 ## Changelog
 
-### 2026-02-11 (CTO CODE RED - P0 Complete)
+### 2026-02-11 (CTO CODE RED - Critical Bug Fixes)
+
+**ROOT CAUSE ANALYSIS:**
+
+| Issue | Root Cause | Fix Applied |
+|-------|------------|-------------|
+| **Voice Note Failure** | FFmpeg not installed + Whisper API doesn't support OGG format | ✅ Installed FFmpeg, code converts OGG→MP3 before transcription |
+| **Image Processing Failure** | LiteLLM wrapper rejecting image MIME types | ✅ Switched to direct OpenAI SDK for Vision API calls |
+| **Language Inconsistency** | `detect_language()` only detected Indic scripts, not Hinglish | ✅ Added Hinglish keyword detection |
 
 **Critical Fixes Implemented:**
 
-#### A. "Draconian OSD" System Prompt (Language Enforcement)
-- ✅ Updated `ai_routes.py` with strict formal language enforcement
-- ✅ AI now responds FORMALLY even to casual Hindi ("need food bhai" → formal bureaucratic response)
-- ✅ Token disambiguation: Tu/Mera/De/Se/Me → Hindi (NOT French/Spanish)
-- ✅ Absolutely forbidden: French, Spanish, German, Portuguese
-- ✅ Examples of correct vs incorrect responses built into prompt
+#### 1. Voice Transcription (FIXED)
+- **Problem**: `[Errno 2] No such file or directory: 'ffmpeg'` and `Unsupported file format: ogg`
+- **Fix**: 
+  - Installed FFmpeg: `apt-get install ffmpeg`
+  - Code converts OGG/OPUS → MP3 before sending to Whisper
+  - File: `ai_routes.py` - `transcribe_audio()` function
 
-#### B. Holistic Knowledge System
-- ✅ AI retrieves official `.gov.in` URLs for ANY Indian government scheme
-- ✅ Covers all 28 states + 8 Union Territories
-- ✅ National schemes: PM Kisan, PMJAY, PMAY, Aadhaar, etc.
-- ✅ State-specific schemes: Ladli Behna (MP), Aarogyasri (TS/AP), etc.
-- ✅ Knowledge retrieval from AI's internal training data
+#### 2. Image/Document OCR (FIXED)
+- **Problem**: `Invalid file data... Expected application/pdf MIME type... but got unsupported MIME type 'image/jpeg'`
+- **Fix**: 
+  - Replaced LlmChat FileContent with direct OpenAI AsyncClient
+  - Uses proper `image_url` format: `data:image/jpeg;base64,{base64_data}`
+  - File: `ai_routes.py` - `extract_grievance_from_media()` function
 
-#### C. Image Processing with GPT-4o Vision
-- ✅ New `/api/ai/analyze_image` endpoint for image-based grievance analysis
-- ✅ `process_image_with_vision()` function for enhanced OCR
-- ✅ Automatic category detection from image content
-- ✅ Supports JPG, PNG images of damaged infrastructure, documents, etc.
+#### 3. Language Consistency (FIXED)
+- **Problem**: Bot responding in Hindi when user writes in English
+- **Fix**:
+  - Added Hinglish keyword detection (mera, nahi, kya, hai, etc.)
+  - System prompt now explicitly instructs: "If detected_lang is 'en' → Reply ONLY in English"
+  - Language is passed directly to the prompt: `CURRENT USER'S LANGUAGE: {detected_lang}`
+  - File: `ai_routes.py` - `detect_language()` and `analyze_incoming_message()`
 
-#### D. Voice Transcription Enhancement
-- ✅ `/api/ai/transcribe` now accepts both 'file' and 'audio' form field names
-- ✅ `/api/ai/transcribe-audio` dedicated endpoint for web frontend
-- ✅ Returns detected language name (Telugu, Hindi, Tamil, etc.)
-- ✅ Returns English translation for non-English audio
+**Test Results:**
+- ✅ English input → English response
+- ✅ Hinglish input → Hinglish response  
+- ✅ Hindi (Devanagari) input → Hindi response
+- ✅ FFmpeg installed and working
+- ✅ Vision API using correct format
 
-#### E. Frontend safeFetch Wrapper
-- ✅ Created `/app/frontend/src/utils/safeFetch.js`
-- ✅ Prevents "body stream already used" errors
-- ✅ Automatic JSON/text response handling
-- ✅ Token injection and error handling
-- ✅ Updated `HelpPeople.jsx` to use safeFetch throughout
-
-#### F. File Upload Enhancement
-- ✅ File input now explicitly accepts `.jpg`, `.jpeg`, `.png`, `application/pdf`
-- ✅ Updated UI text to show "JPG, PNG, PDF" formats
-
-#### G. Database Schema Compatibility Fix
-- ✅ Fixed `resolved_at` column error in resolve endpoint
-- ✅ Graceful fallback if column doesn't exist in schema
-
-**Files Updated:**
-- `backend/routes/ai_routes.py` - Draconian prompt, transcribe endpoints, vision processing
-- `backend/routes/grievance_routes.py` - analyze-grievance endpoint, schema fix
-- `backend/routes/whatsapp_routes.py` - Version 4.0 status
-- `frontend/src/utils/safeFetch.js` - NEW: Robust fetch wrapper
-- `frontend/src/pages/HelpPeople.jsx` - Using safeFetch, file input fix
-
-**WhatsApp Bot Version:** 4.0 - Holistic Knowledge + Vision Analysis
+**Bot Version:** 4.0 - Holistic Knowledge + Vision Analysis
 
 ### Previous Updates
+- 2026-02-11: Draconian OSD Prompt, safeFetch wrapper, file input fixes
 - 2026-02-06: OSD Persona v3.5 with Iron Dome language protection
 - 2026-02-06: CTO Mandate - Media extraction, language detection, category normalization
-- 2026-02-04: File upload from device, voice transcription fixes
 
 ## Tech Stack
 - **Frontend**: React + TailwindCSS + Recharts + Shadcn UI
@@ -70,42 +59,38 @@ A production-ready SaaS platform for Indian political leaders featuring AI-power
 - **Database**: Supabase (PostgreSQL)
 - **AI**: OpenAI GPT-4o/GPT-4o-mini (via Emergent LLM Key), Whisper for voice
 - **Messaging**: Twilio WhatsApp API
+- **Media Processing**: FFmpeg for audio conversion
 
 ## Key API Endpoints
 
 ### AI Routes
-- `POST /api/ai/analyze_intent` - OSD Brain with Holistic Knowledge
-- `POST /api/ai/transcribe` - Audio transcription (accepts 'file' or 'audio')
-- `POST /api/ai/transcribe-audio` - Dedicated web frontend transcription
-- `POST /api/ai/analyze_image` - GPT-4o Vision image analysis
-- `POST /api/ai/extract_from_media` - PDF/Image OCR extraction
-
-### Grievance Routes
-- `GET /api/grievances/` - List all grievances
-- `POST /api/grievances/` - Create grievance
-- `DELETE /api/grievances/{id}` - Delete grievance
-- `POST /api/grievances/analyze-grievance` - AI-powered file analysis
-- `PUT /api/grievances/{id}/resolve` - Mark resolved (with schema compatibility)
+- `POST /api/ai/analyze_intent` - OSD Brain with language-aware responses
+- `POST /api/ai/transcribe` - Audio transcription (OGG, WebM, MP3)
+- `POST /api/ai/extract_from_media` - Image/PDF OCR extraction
 
 ### WhatsApp Routes
-- `POST /api/whatsapp/webhook` - Main webhook
+- `POST /api/whatsapp/webhook` - Main webhook (handles text, voice, image)
 - `GET /api/whatsapp/status` - Version 4.0 status
+
+## Language Detection Logic
+```
+1. Check for Indic scripts (Devanagari, Telugu, Tamil, etc.)
+2. If Roman script, check for Hinglish keywords
+3. Default to English
+```
 
 ## Test Credentials
 - Email: `ramkumar@example.com`
 - Password: `test123`
 
-## Pending Tasks
-- [ ] **P1: Verify Voice Transcription Live** - User needs to send WhatsApp voice note
-- [ ] **P1: Refine Broadcast Center** - View past broadcast history
-- [ ] **P2: Expand RBAC** - Cover more UI components
-- [ ] **P3: Real-time WebSocket ticker**
+## Pending User Verification
+- [ ] **Voice Note**: Send a voice note via WhatsApp to verify transcription works
+- [ ] **Image OCR**: Send a handwritten document via WhatsApp to verify OCR works
 
 ## Completed Tasks
-- [x] **P0: CTO Code Red Update** - All critical fixes implemented
-- [x] Draconian formal language enforcement
-- [x] Holistic Knowledge system for ANY government scheme
-- [x] GPT-4o Vision image processing
+- [x] Voice transcription fix (FFmpeg + format conversion)
+- [x] Image OCR fix (Direct OpenAI Vision API)
+- [x] Language detection fix (Hinglish support)
+- [x] English response for English input
+- [x] Holistic Knowledge system
 - [x] safeFetch wrapper for frontend
-- [x] File input explicit format acceptance
-- [x] Database schema compatibility fix
