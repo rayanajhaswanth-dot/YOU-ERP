@@ -467,3 +467,62 @@ async def upload_resolution_file(
         "url": file_url,
         "can_resolve": True
     }
+
+
+# ==============================================================================
+# CTO MANDATE: IMAGE/PDF GRIEVANCE ANALYSIS ENDPOINT
+# ==============================================================================
+
+@router.post("/analyze-grievance")
+async def analyze_grievance_file(
+    file: UploadFile = File(...),
+    current_user: TokenData = Depends(get_current_user)
+):
+    """
+    CTO CODE RED: Analyzes uploaded grievance file (PDF OR IMAGE).
+    Uses GPT-4o Vision for image OCR.
+    """
+    from routes.ai_routes import extract_grievance_from_media, map_to_official_category
+    
+    try:
+        content = await file.read()
+        filename = file.filename or "uploaded_file"
+        content_type = file.content_type or "application/octet-stream"
+        ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
+        
+        # Validate file type
+        allowed_extensions = {'pdf', 'png', 'jpg', 'jpeg'}
+        if ext not in allowed_extensions:
+            raise HTTPException(status_code=400, detail=f"Invalid format. Use PDF, JPG, PNG. Got: {ext}")
+        
+        print(f"📄 Analyzing grievance file: {filename}, type: {content_type}, size: {len(content)} bytes")
+        
+        # Extract using AI
+        extracted = await extract_grievance_from_media(content, content_type)
+        
+        if not extracted:
+            raise HTTPException(status_code=500, detail="OCR Failed. The image might be blurry or empty.")
+        
+        # Normalize category
+        if extracted.get('category'):
+            extracted['category'] = map_to_official_category(extracted['category'])
+        
+        return {
+            "success": True,
+            "text": extracted.get('description', ''),
+            "analysis": {
+                "name": extracted.get('name'),
+                "contact": extracted.get('contact'),
+                "area": extracted.get('area'),
+                "category": extracted.get('category', 'Miscellaneous'),
+                "urgency": extracted.get('urgency', 'MEDIUM'),
+                "description": extracted.get('description', ''),
+                "language": extracted.get('language', 'en')
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Analyze grievance error: {e}")
+        raise HTTPException(status_code=500, detail=f"Server Error: {str(e)}")
