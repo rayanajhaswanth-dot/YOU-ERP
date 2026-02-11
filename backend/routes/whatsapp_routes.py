@@ -190,8 +190,12 @@ async def process_osd_conversation(phone: str, message: str, name: str, media_ur
                         print(f"✅ Voice transcribed successfully: {transcript[:100]}...")
                     else:
                         print(f"❌ Voice transcription returned empty result")
-                        # Return error in user's likely language (default to Hinglish for Indian users)
-                        return "Maaf kijiye, aapka voice message samajh nahi aaya. Kripya dobara bhejein ya text mein likhein."
+                        # Detect language from any text message context
+                        user_lang = detect_language(message) if message else 'en'
+                        if user_lang == 'en':
+                            return "Sorry, I could not understand your voice message. Please try again or type your message."
+                        else:
+                            return "Maaf kijiye, aapka voice message samajh nahi aaya. Kripya dobara bhejein ya text mein likhein."
                 
                 elif is_image or is_pdf:
                     # Extract grievance from document
