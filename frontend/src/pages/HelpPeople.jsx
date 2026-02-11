@@ -805,7 +805,7 @@ const HelpPeople = () => {
                       </div>
                       <div>
                         <Label className="text-white">Attach Photo/Document (Optional)</Label>
-                        <input type="file" ref={mediaInputRef} onChange={handleMediaSelect} accept="image/*,application/pdf" className="hidden" />
+                        <input type="file" ref={mediaInputRef} onChange={handleMediaSelect} accept=".jpg,.jpeg,.png,image/jpeg,image/png,application/pdf" className="hidden" />
                         <div onClick={() => mediaInputRef.current?.click()} className="mt-1 border-2 border-dashed border-slate-700 rounded-lg p-4 text-center cursor-pointer hover:border-orange-500 transition-colors">
                           {mediaFile ? (
                             <div className="text-green-400 flex items-center justify-center gap-2">
@@ -815,7 +815,7 @@ const HelpPeople = () => {
                           ) : (
                             <div className="text-slate-500 flex items-center justify-center gap-2">
                               <Upload className="h-4 w-4" />
-                              <span className="text-sm">Click to attach</span>
+                              <span className="text-sm">Click to attach (JPG, PNG, PDF)</span>
                             </div>
                           )}
                         </div>
