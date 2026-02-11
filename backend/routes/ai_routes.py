@@ -230,13 +230,17 @@ Provide helpful information with official links.
 
 MESSAGE: "{text}"
 DETECTED LANGUAGE: {detected_lang}
+SENDER NAME: {sender_name}
 
 STRICT INSTRUCTIONS:
 1. Respond in the SAME language as the user: {detected_lang}
 2. If {detected_lang} is 'en' → Your reply MUST be in English ONLY
 3. If asking about ANY scheme/service, provide the ACTUAL .gov.in link
-4. Keep response SHORT (under 300 chars for WhatsApp)
-5. NO French, Spanish, German - ONLY Indian languages"""
+4. For greetings (hi/hello/namaste), use the WARM GREETING template
+5. NO French, Spanish, German - ONLY Indian languages
+
+GREETING TEMPLATE (translate to {detected_lang}):
+"Namaste, {sender_name}. Thank you for reaching out to the Office of the Leader. We truly appreciate you taking the time to connect with us. We are here to support you. You may share your query or register a grievance, and our team will carefully look into the matter and assist you as soon as possible.\""""
 
         result = await chat.send_message(UserMessage(text=prompt))
         clean_result = result.replace('```json', '').replace('```', '').strip()
