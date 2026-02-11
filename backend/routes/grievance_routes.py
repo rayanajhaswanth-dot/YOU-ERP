@@ -336,12 +336,24 @@ async def resolve_grievance(
     if not grievance.get('resolution_image_url'):
         raise HTTPException(status_code=400, detail="Photo verification required before resolving. Please upload a resolution photo first.")
     
+    # Update status to RESOLVED (resolved_at column may not exist in all schemas)
     update_data = {
-        'status': 'RESOLVED',
-        'resolved_at': datetime.now(timezone.utc).isoformat()
+        'status': 'RESOLVED'
     }
     
-    supabase.table('grievances').update(update_data).eq('id', grievance_id).execute()
+    try:
+        # Try to update with resolved_at timestamp
+        supabase.table('grievances').update({
+            **update_data,
+            'resolved_at': datetime.now(timezone.utc).isoformat()
+        }).eq('id', grievance_id).execute()
+    except Exception as e:
+        # If resolved_at column doesn't exist, update without it
+        if 'resolved_at' in str(e):
+            print(f"⚠️ resolved_at column not in schema, updating status only")
+            supabase.table('grievances').update(update_data).eq('id', grievance_id).execute()
+        else:
+            raise
     
     # Send WhatsApp notification in citizen's NATIVE language
     notification_sent = False
