@@ -5,116 +5,98 @@ A production-ready SaaS platform for Indian political leaders featuring AI-power
 
 ## Changelog
 
-### 2026-02-11 (CTO CODE RED - GOLD STANDARD FINAL FIX)
+### 2026-02-11 (CTO-Approved Message Templates)
 
-**ISSUES FIXED:**
+**NEW FEATURES:**
 
-| Issue | Root Cause | Fix |
-|-------|-----------|-----|
-| **Foreign Language Response (Romanian)** | `translate_text()` accepting unknown language codes | ✅ Added strict validation + foreign language safety check |
-| **PDF Processing Fails** | Gemini Vision doesn't support PDF directly | ✅ Installed PyMuPDF to convert PDF to PNG first |
-| **Language Code Validation** | Unknown codes like "unknown_lang" passed through | ✅ Whitelist of valid Indian languages |
+#### 1. Warm Greeting Message
+```
+Namaste, [Name].
+Thank you for reaching out to the Office of the Leader. We truly appreciate 
+you taking the time to connect with us.
 
-**GOLD STANDARD SOLUTIONS:**
-
-#### 1. Translation with Safety Check
-```python
-# Only translate to KNOWN Indian languages
-VALID_LANGUAGES = ['en', 'hi', 'hinglish', 'te', 'tenglish', 'ta', 'kn', 'ml', 'bn', 'mr', 'gu', 'pa']
-
-# If unknown language, default to English
-if language not in VALID_LANGUAGES:
-    language = 'en'
-
-# After translation, check for foreign language markers
-foreign_markers = ['constatat', 'nemulțumirea', 'înregistrat', ...]  # Romanian
-if any(marker in response.lower() for marker in foreign_markers):
-    return english_text  # Safety fallback
+We are here to support you. You may share your query or register a grievance, 
+and our team will carefully look into the matter and assist you as soon as possible.
 ```
 
-#### 2. PDF Processing with PyMuPDF
-```python
-import fitz  # PyMuPDF
-pdf_doc = fitz.open(stream=media_data, filetype="pdf")
-page = pdf_doc[0]
-pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))  # 2x zoom for better OCR
-image_data = pix.tobytes("png")
-# Then process image_data with Gemini Vision
+#### 2. Grievance Registration Confirmation
+```
+Your grievance has been successfully registered. Please find the details below:
+
+📋 Issue Category: [Category]
+📝 Issue Type: [Description]
+🎫 Ticket Number: #[TicketID]
+
+Thank you for bringing this to our attention. We understand that your concern 
+is important, and our team will review it with care.
+
+Please stay connected for updates. We are committed to keeping you informed 
+throughout the process.
 ```
 
-#### 3. All Output in English for Database
-- All grievances stored in English
-- Category: Official English category only
-- Description: English (translated/summarized)
-- Name/Area: Transliterated to English
+**Implementation:**
+- `whatsapp_routes.py`: Added `get_osd_response()` with greeting template
+- `whatsapp_routes.py`: Added `get_grievance_confirmation_message()` function
+- `ai_routes.py`: Updated system prompt to use warm greeting for CHAT intents
+- Messages are automatically translated to user's detected language
 
-**Test Results:**
-```
-✅ Image OCR → English description
-✅ PDF Processing → PyMuPDF conversion → Gemini OCR → English output
-✅ Hindi translation → Correct Hindi (not Romanian)
-✅ Unknown language → Falls back to English
-✅ Foreign language detection → Safety check blocks and returns English
-```
+**Bot Version:** 4.2 - CTO-Approved Warm Messages
 
-**Files Updated:**
-- `backend/routes/ai_routes.py`:
-  - `translate_text()` - Added VALID_LANGUAGES whitelist + foreign marker check
-  - `extract_grievance_from_media()` - Added PyMuPDF PDF conversion
-  - `process_image_with_vision()` - Returns valid language codes only
-- `backend/routes/whatsapp_routes.py`:
-  - `register_grievance_osd()` - Validates language before translation
+### Previous Updates (2026-02-11)
+- Gold Standard OCR with Gemini Vision
+- PDF processing with PyMuPDF
+- Language safety (no foreign languages)
+- FFmpeg for voice transcription
 
-**Dependencies Added:**
-- PyMuPDF (`pip install PyMuPDF`)
-- reportlab (for PDF testing)
+## Message Templates
 
-**Bot Version:** 4.1 - Gold Standard Language + PDF Support
+### Greeting (CHAT Intent)
+| Language | Response |
+|----------|----------|
+| English | Namaste, [Name]. Thank you for reaching out... |
+| Hindi | नमस्ते, [Name]. नेता के कार्यालय से संपर्क करने के लिए धन्यवाद... |
+| Hinglish | Namaste, [Name]. Leader ke office se contact karne ke liye dhanyawad... |
 
-### Previous Updates
-- 2026-02-11: Gemini Vision OCR, FFmpeg installed, Hinglish detection
-- 2026-02-06: OSD Persona v3.5 with Iron Dome language protection
+### Grievance Confirmation
+| Field | Example |
+|-------|---------|
+| Category | Infrastructure & Roads |
+| Issue Type | Road is broken near village... |
+| Ticket Number | #ABC12345 |
 
 ## Tech Stack
-- **Frontend**: React + TailwindCSS + Recharts + Shadcn UI
+- **Frontend**: React + TailwindCSS + Shadcn UI
 - **Backend**: FastAPI (Python)
 - **Database**: Supabase (PostgreSQL)
-- **AI Vision**: Gemini 2.0 Flash via Emergent LLM Key
-- **PDF Processing**: PyMuPDF (converts PDF to image for OCR)
-- **Audio**: OpenAI Whisper-1 via emergentintegrations
-- **Messaging**: Twilio WhatsApp API
+- **AI Vision**: Gemini 2.0 Flash (via Emergent LLM Key)
+- **AI Text**: GPT-4o-mini (via Emergent LLM Key)
+- **PDF Processing**: PyMuPDF
+- **Audio**: OpenAI Whisper-1
 
-## Language Handling
-
-### Valid Language Codes
-| Code | Language |
-|------|----------|
-| en | English |
-| hi | Hindi (Devanagari) |
-| hinglish | Hindi (Roman script) |
-| te | Telugu |
-| tenglish | Telugu (Roman script) |
-| ta | Tamil |
-| kn | Kannada |
-| ml | Malayalam |
-| bn | Bengali |
-| mr | Marathi |
-| gu | Gujarati |
-| pa | Punjabi |
-
-### Language Flow
-1. **OCR**: Detects original language, outputs English
-2. **Database**: Stores language code + English description
-3. **Response**: Translates confirmation to user's language (if valid)
-4. **Fallback**: Unknown languages → English response
+## Language Support
+| Code | Language | Script |
+|------|----------|--------|
+| en | English | Roman |
+| hi | Hindi | Devanagari |
+| hinglish | Hindi | Roman |
+| te | Telugu | Telugu |
+| tenglish | Telugu | Roman |
+| ta | Tamil | Tamil |
+| kn | Kannada | Kannada |
+| ml | Malayalam | Malayalam |
+| bn | Bengali | Bengali |
+| mr | Marathi | Devanagari |
+| gu | Gujarati | Gujarati |
+| pa | Punjabi | Gurmukhi |
 
 ## Test Credentials
 - Email: `ramkumar@example.com`
 - Password: `test123`
 
 ## Completed Tasks
-- [x] Foreign language bug fixed (Romanian issue)
-- [x] PDF processing fixed (PyMuPDF conversion)
-- [x] All outputs in English for database
-- [x] Valid language code validation
-- [x] Safety check for translation output
+- [x] Warm greeting message (CTO-approved)
+- [x] Grievance confirmation template
+- [x] Language translation for all messages
+- [x] Foreign language safety check
+- [x] PDF OCR with PyMuPDF
+- [x] Image OCR with Gemini Vision
