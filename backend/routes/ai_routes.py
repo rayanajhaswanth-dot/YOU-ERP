@@ -90,11 +90,31 @@ LANGUAGE_SCRIPTS = {
     'bn': (0x0980, 0x09FF),  # Bengali
 }
 
+# Hinglish keywords (Roman Hindi)
+HINGLISH_KEYWORDS = [
+    'mera', 'meri', 'mujhe', 'kya', 'hai', 'hain', 'nahi', 'nhi', 'kaise', 'kahan',
+    'aap', 'tum', 'aapka', 'kripya', 'namaste', 'dhanyawad', 'shukriya', 'madad',
+    'paani', 'pani', 'bijli', 'sadak', 'hospital', 'pension', 'ration', 'yojana',
+    'sarkar', 'sarkari', 'seva', 'karo', 'chahiye', 'hoga', 'hogi', 'karein',
+    'batao', 'bataye', 'bataiye', 'lagao', 'milega', 'milegi', 'dedo', 'dijiye',
+    'abhi', 'aur', 'bhi', 'lekin', 'par', 'phir', 'woh', 'yeh', 'ye', 'iska',
+    'iski', 'uska', 'uski', 'humara', 'tumhara', 'unka', 'inhe', 'unhe', 'jaldi'
+]
+
 def detect_language(text: str) -> str:
-    """Detect language using Unicode script ranges (no LLM = frugal)"""
+    """
+    Detect language using Unicode script ranges AND Hinglish keywords.
+    - Devanagari/Telugu/Tamil etc → return script code
+    - Roman text with Hinglish keywords → return 'hinglish'
+    - Pure English → return 'en'
+    """
     if not text:
         return 'en'
     
+    text_lower = text.lower()
+    words = text_lower.split()
+    
+    # First check for Indic scripts (Devanagari, Telugu, etc.)
     script_counts = {lang: 0 for lang in LANGUAGE_SCRIPTS}
     total_alpha = 0
     
@@ -107,12 +127,15 @@ def detect_language(text: str) -> str:
                     script_counts[lang] += 1
                     break
     
-    if total_alpha == 0:
-        return 'en'
+    if total_alpha > 0:
+        max_lang = max(script_counts, key=script_counts.get)
+        if script_counts[max_lang] > total_alpha * 0.2:
+            return max_lang
     
-    max_lang = max(script_counts, key=script_counts.get)
-    if script_counts[max_lang] > total_alpha * 0.2:
-        return max_lang
+    # Check for Hinglish (Roman Hindi)
+    hinglish_count = sum(1 for word in words if word in HINGLISH_KEYWORDS)
+    if len(words) > 0 and hinglish_count >= max(1, len(words) * 0.15):
+        return 'hinglish'
     
     return 'en'
 
