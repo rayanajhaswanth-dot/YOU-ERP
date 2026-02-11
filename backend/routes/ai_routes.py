@@ -301,10 +301,10 @@ async def translate_text(text: str, target_lang: str) -> str:
 
 async def extract_grievance_from_media(media_data: bytes, media_type: str) -> Dict[str, Any]:
     """
-    HIGH-PRECISION "Deep OCR" extraction for PDF/Image.
-    Handles mixed languages (Hindi name, English description) and normalizes ALL fields to English.
+    GOLD STANDARD SOLUTION - CTO CODE RED
     
-    CTO CODE RED FIX: Use direct OpenAI API for image vision to avoid LiteLLM compatibility issues.
+    Uses Gemini Vision via emergentintegrations library for reliable image OCR.
+    This bypasses the OpenAI direct API issues with Emergent LLM Key.
     """
     try:
         media_base64 = base64.b64encode(media_data).decode('utf-8')
@@ -321,88 +321,91 @@ async def extract_grievance_from_media(media_data: bytes, media_type: str) -> Di
         else:
             content_type = "image/jpeg"
         
-        print(f"📎 Processing media: type={content_type}, size={len(media_data)} bytes")
+        print(f"📎 [GOLD STANDARD OCR] Processing: type={content_type}, size={len(media_data)} bytes")
         
-        # Use direct OpenAI SDK for vision (more reliable than LiteLLM for images)
-        from openai import AsyncOpenAI
+        # Use ImageContent for base64 images - this is the correct way with emergentintegrations
+        from emergentintegrations.llm.chat import ImageContent
         
-        # Use Emergent's OpenAI-compatible endpoint
-        client = AsyncOpenAI(api_key=EMERGENT_LLM_KEY)
+        # Create image content object
+        image_content = ImageContent(image_base64=media_base64)
+        
+        # Use Gemini Vision which has excellent image understanding
+        chat = LlmChat(
+            api_key=EMERGENT_LLM_KEY,
+            session_id=f"gold-ocr-{uuid.uuid4()}",
+            system_message="""You are an expert OCR system for Indian government grievance documents.
+
+TASK: Deep OCR with English normalization.
+
+RULES:
+1. Documents may contain MIXED LANGUAGES (Hindi, Telugu, Tamil, English)
+2. Extract ALL entities regardless of script
+3. ALL OUTPUT must be in ENGLISH - transliterate everything
+
+ENTITY EXTRACTION:
+- NAME: Look for "Name", "नाम", "పేరు" → Transliterate to English
+- AREA: Look for "Mandal", "Village", "गांव" → Transliterate to English  
+- CONTACT: Extract 10-digit phone numbers
+- CATEGORY: Map to official categories
+- DESCRIPTION: Summarize issue in clear English
+
+OFFICIAL CATEGORIES (pick one):
+Water & Irrigation, Agriculture, Health & Sanitation, Education, 
+Infrastructure & Roads, Law & Order, Welfare Schemes, Electricity,
+Forests & Environment, Finance & Taxation, Urban & Rural Development, Miscellaneous"""
+        ).with_model("gemini", "gemini-2.0-flash")  # Gemini has excellent vision capabilities
         
         ocr_prompt = """Perform DEEP OCR on this document/image.
 
 EXTRACT and NORMALIZE TO ENGLISH:
-1. Name (transliterate from any script to English)
-2. Contact Number (10 digits if found)
-3. Area/Location (transliterate Mandal/Village/Ward names to English)
-4. Issue Category (MUST be from: Water & Irrigation, Agriculture, Health & Sanitation, Education, Infrastructure & Roads, Law & Order, Welfare Schemes, Electricity, Forests & Environment, Finance & Taxation, Urban & Rural Development, Miscellaneous)
-5. Issue Description (translate/summarize in English)
-6. Original Document Language
+1. Name (transliterate to English)
+2. Contact Number (10 digits)
+3. Area/Location (transliterate to English)
+4. Issue Category (from official list)
+5. Issue Description (in English)
+6. Original Language
 
-Return JSON only (no markdown):
-{
-    "name": "English transliterated name or null",
-    "contact": "phone number or null",
-    "area": "English transliterated area name or null",
-    "category": "Official English category",
-    "description": "English description/summary of the issue",
-    "language": "original language code (en/te/hi/ta)"
-}"""
-
-        response = await client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {
-                    "role": "system",
-                    "content": """You are an expert OCR system for government grievance documents in India.
-Your task is DEEP OCR with ENGLISH NORMALIZATION.
-
-CRITICAL INSTRUCTIONS:
-1. The document may contain MIXED LANGUAGES (Hindi, Telugu, Tamil, English mixed together)
-2. You MUST identify and extract ALL entities regardless of script
-3. ALL OUTPUT FIELDS MUST BE IN ENGLISH - transliterate/translate everything
-
-ENTITY EXTRACTION RULES:
-- NAME: Look for "Name", "Applicant", "नाम", "పేరు" etc. TRANSLITERATE to English
-- AREA: Look for "Mandal", "Village", "Ward" etc. TRANSLITERATE accurately
-- CONTACT: Extract any 10-digit phone numbers
-- CATEGORY: Map to official English categories only
-- DESCRIPTION: Read entire content, summarize in CLEAR ENGLISH"""
-                },
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": ocr_prompt},
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:{content_type};base64,{media_base64}"
-                            }
-                        }
-                    ]
-                }
-            ],
-            max_tokens=1000,
-            temperature=0.2
-        )
+Return ONLY valid JSON (no markdown, no backticks):
+{"name": "string or null", "contact": "string or null", "area": "string or null", "category": "string", "description": "string", "language": "string"}"""
         
-        result = response.choices[0].message.content
-        clean_result = result.replace('```json', '').replace('```', '').strip()
+        # Send message with image
+        msg = UserMessage(text=ocr_prompt, file_contents=[image_content])
+        result = await chat.send_message(msg)
+        
+        print(f"📝 [GOLD STANDARD OCR] Raw response: {result[:200]}...")
+        
+        # Clean and parse response
+        clean_result = result.strip()
+        # Remove any markdown formatting
+        if clean_result.startswith('```'):
+            clean_result = clean_result.split('```')[1]
+            if clean_result.startswith('json'):
+                clean_result = clean_result[4:]
+        clean_result = clean_result.replace('```', '').strip()
+        
         extracted = json.loads(clean_result)
         
         # Ensure category is from official list
         if extracted.get('category') not in OFFICIAL_CATEGORIES:
             extracted['category'] = map_to_official_category(extracted.get('category', ''))
         
-        print(f"✅ OCR extraction successful: {extracted.get('description', '')[:100]}...")
+        print(f"✅ [GOLD STANDARD OCR] Success: {extracted.get('description', '')[:100]}...")
         return extracted
         
     except json.JSONDecodeError as je:
-        print(f"❌ OCR JSON parse error: {je}")
-        print(f"Raw response: {result[:500] if 'result' in dir() else 'No result'}")
-        return None
+        print(f"❌ [GOLD STANDARD OCR] JSON parse error: {je}")
+        print(f"Raw response was: {result[:500] if 'result' in dir() else 'No result'}")
+        # Try to extract basic info even if JSON parsing fails
+        return {
+            "name": None,
+            "contact": None,
+            "area": None,
+            "category": "Miscellaneous",
+            "description": result[:500] if 'result' in dir() else "Could not process document",
+            "language": "unknown"
+        }
     except Exception as e:
-        print(f"❌ Deep OCR extraction error: {e}")
+        print(f"❌ [GOLD STANDARD OCR] Error: {e}")
         import traceback
         traceback.print_exc()
         return None
